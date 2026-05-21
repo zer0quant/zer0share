@@ -8,12 +8,15 @@ from zer0share.config import load_config
 from zer0share.fetcher import (
     ADJ_FACTOR_COLS,
     BASIC_COLS,
+    CI_MEMBER_COLS,
     DAILY_BASIC_COLS,
     DAILY_COLS,
-INDEX_WEIGHT_COLS,
+    INDEX_WEIGHT_COLS,
     STOCK_ST_COLS,
     STK_LIMIT_COLS,
     SUSPEND_D_COLS,
+    SW_CLASSIFY_COLS,
+    SW_MEMBER_COLS,
     TRADE_CAL_COLS,
 )
 
@@ -326,6 +329,99 @@ class LocalPro:
         df = duckdb.connect().execute(sql, [str(pattern), *params]).fetchdf()
         return _format_date_columns(df, ["trade_date"])
 
+    def index_classify(
+        self,
+        level: str | None = None,
+        src: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        path = self._data_dir / "industry" / "sw_classify" / "data.parquet"
+        if not path.exists():
+            raise FileNotFoundError(
+                "sw_classify data not found; run `python main.py sync --table industry` first"
+            )
+        selected = _parse_fields(fields, SW_CLASSIFY_COLS)
+        where = []
+        params = []
+        if level is not None:
+            where.append("level = ?")
+            params.append(level)
+        if src is not None:
+            where.append("src = ?")
+            params.append(src)
+        sql = f"SELECT {', '.join(selected)} FROM read_parquet(?)"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY industry_code"
+        df = duckdb.connect().execute(sql, [str(path), *params]).fetchdf()
+        return df
+
+    def index_member_all(
+        self,
+        l1_code: str | None = None,
+        ts_code: str | None = None,
+        is_new: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        path = self._data_dir / "industry" / "sw_member" / "data.parquet"
+        if not path.exists():
+            raise FileNotFoundError(
+                "sw_member data not found; run `python main.py sync --table industry` first"
+            )
+        selected = _parse_fields(fields, SW_MEMBER_COLS)
+        where = []
+        params = []
+        if l1_code is not None:
+            where.append("l1_code = ?")
+            params.append(l1_code)
+        if ts_code is not None:
+            codes = [code.strip() for code in ts_code.split(",") if code.strip()]
+            placeholders = ", ".join("?" for _ in codes)
+            where.append(f"ts_code IN ({placeholders})")
+            params.extend(codes)
+        if is_new is not None:
+            where.append("is_new = ?")
+            params.append(is_new)
+        sql = f"SELECT {', '.join(selected)} FROM read_parquet(?)"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY ts_code, l1_code"
+        df = duckdb.connect().execute(sql, [str(path), *params]).fetchdf()
+        return _format_date_columns(df, ["in_date", "out_date"])
+
+    def ci_index_member(
+        self,
+        l1_code: str | None = None,
+        ts_code: str | None = None,
+        is_new: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        path = self._data_dir / "industry" / "ci_member" / "data.parquet"
+        if not path.exists():
+            raise FileNotFoundError(
+                "ci_member data not found; run `python main.py sync --table ci_member` first"
+            )
+        selected = _parse_fields(fields, CI_MEMBER_COLS)
+        where = []
+        params = []
+        if l1_code is not None:
+            where.append("l1_code = ?")
+            params.append(l1_code)
+        if ts_code is not None:
+            codes = [code.strip() for code in ts_code.split(",") if code.strip()]
+            placeholders = ", ".join("?" for _ in codes)
+            where.append(f"ts_code IN ({placeholders})")
+            params.extend(codes)
+        if is_new is not None:
+            where.append("is_new = ?")
+            params.append(is_new)
+        sql = f"SELECT {', '.join(selected)} FROM read_parquet(?)"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY ts_code, l1_code"
+        df = duckdb.connect().execute(sql, [str(path), *params]).fetchdf()
+        return _format_date_columns(df, ["in_date", "out_date"])
+
     def pro_bar(
         self,
         ts_code: str,
@@ -402,6 +498,9 @@ class LocalPro:
             "index_weight": self.index_weight,
             "universe": self.universe,
             "pro_bar": self.pro_bar,
+            "index_classify": self.index_classify,
+            "index_member_all": self.index_member_all,
+            "ci_index_member": self.ci_index_member,
         }
         try:
             method = dispatch[api_name]

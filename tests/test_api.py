@@ -7,8 +7,11 @@ from zer0share.api import LocalPro
 from zer0share.storage import (
     write_adj_factor,
     write_basic,
+    write_ci_member,
     write_daily_kline,
     write_daily_partition,
+    write_sw_classify,
+    write_sw_member,
     write_trade_cal,
     write_universe,
 )
@@ -641,3 +644,265 @@ def test_pro_bar_rejects_unsupported_asset_and_freq(tmp_path):
 
     with pytest.raises(NotImplementedError, match="freq='D'"):
         pro.pro_bar(ts_code="000001.SZ", freq="W")
+
+
+def test_index_classify_filters_by_level(tmp_path):
+    write_sw_classify(tmp_path, pd.DataFrame({
+        "index_code": ["801010.SI", "801016.SI"],
+        "industry_name": ["农林牧渔", "种植业"],
+        "level": ["L1", "L2"],
+        "parent_code": ["0", "110000"],
+        "industry_code": ["110000", "110100"],
+        "is_pub": ["1", "1"],
+        "src": ["SW2021", "SW2021"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.index_classify(level="L1")
+    assert len(result) == 1
+    assert result.iloc[0]["industry_name"] == "农林牧渔"
+
+
+def test_index_classify_filters_by_src(tmp_path):
+    write_sw_classify(tmp_path, pd.DataFrame({
+        "index_code": ["801010.SI", "801010.SI"],
+        "industry_name": ["农林牧渔", "农林牧渔"],
+        "level": ["L1", "L1"],
+        "parent_code": ["0", "0"],
+        "industry_code": ["110000", "110000"],
+        "is_pub": ["1", "1"],
+        "src": ["SW2021", "SW2014"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.index_classify(src="SW2014")
+    assert len(result) == 1
+
+
+def test_index_classify_no_filter_returns_all(tmp_path):
+    write_sw_classify(tmp_path, pd.DataFrame({
+        "index_code": ["801010.SI", "801016.SI"],
+        "industry_name": ["农林牧渔", "种植业"],
+        "level": ["L1", "L2"],
+        "parent_code": ["0", "110000"],
+        "industry_code": ["110000", "110100"],
+        "is_pub": ["1", "1"],
+        "src": ["SW2021", "SW2021"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.index_classify()
+    assert len(result) == 2
+
+
+def test_index_member_all_filters_by_ts_code(tmp_path):
+    write_sw_member(tmp_path, pd.DataFrame({
+        "l1_code": ["801010.SI", "801030.SI"],
+        "l1_name": ["农林牧渔", "化工"],
+        "l2_code": ["801016.SI", "801033.SI"],
+        "l2_name": ["种植业", "化学原料"],
+        "l3_code": ["850111.SI", "850321.SI"],
+        "l3_name": ["种子", "纯碱"],
+        "ts_code": ["002041.SZ", "600291.SH"],
+        "name": ["登海种业", "西水股份"],
+        "in_date": [date(2021, 12, 13), date(2021, 12, 13)],
+        "out_date": [None, None],
+        "is_new": ["Y", "Y"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.index_member_all(ts_code="002041.SZ")
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "002041.SZ"
+
+
+def test_index_member_all_filters_by_is_new(tmp_path):
+    write_sw_member(tmp_path, pd.DataFrame({
+        "l1_code": ["801010.SI", "801010.SI"],
+        "l1_name": ["农林牧渔", "农林牧渔"],
+        "l2_code": ["801016.SI", "801016.SI"],
+        "l2_name": ["种植业", "种植业"],
+        "l3_code": ["850111.SI", "850111.SI"],
+        "l3_name": ["种子", "种子"],
+        "ts_code": ["002041.SZ", "600313.SH"],
+        "name": ["登海种业", "农发种业"],
+        "in_date": [date(2021, 12, 13), date(2021, 12, 13)],
+        "out_date": [date(2022, 6, 30), None],
+        "is_new": ["N", "Y"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.index_member_all(is_new="Y")
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "600313.SH"
+
+
+def test_index_member_all_filters_by_l1_code(tmp_path):
+    write_sw_member(tmp_path, pd.DataFrame({
+        "l1_code": ["801010.SI", "801030.SI"],
+        "l1_name": ["农林牧渔", "化工"],
+        "l2_code": ["801016.SI", "801033.SI"],
+        "l2_name": ["种植业", "化学原料"],
+        "l3_code": ["850111.SI", "850321.SI"],
+        "l3_name": ["种子", "纯碱"],
+        "ts_code": ["002041.SZ", "600291.SH"],
+        "name": ["登海种业", "西水股份"],
+        "in_date": [date(2021, 12, 13), date(2021, 12, 13)],
+        "out_date": [None, None],
+        "is_new": ["Y", "Y"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.index_member_all(l1_code="801010.SI")
+    assert len(result) == 1
+
+
+def test_index_member_all_supports_multi_ts_code(tmp_path):
+    write_sw_member(tmp_path, pd.DataFrame({
+        "l1_code": ["801010.SI", "801030.SI", "801040.SI"],
+        "l1_name": ["农林牧渔", "化工", "钢铁"],
+        "l2_code": ["801016.SI", "801033.SI", "801043.SI"],
+        "l2_name": ["种植业", "化学原料", "冶钢原料"],
+        "l3_code": ["850111.SI", "850321.SI", "850431.SI"],
+        "l3_name": ["种子", "纯碱", "铁矿石"],
+        "ts_code": ["002041.SZ", "600291.SH", "000002.SZ"],
+        "name": ["登海种业", "西水股份", "万科A"],
+        "in_date": [date(2021, 12, 13), date(2021, 12, 13), date(2021, 12, 13)],
+        "out_date": [None, None, None],
+        "is_new": ["Y", "Y", "Y"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.index_member_all(ts_code="002041.SZ,000002.SZ")
+    assert len(result) == 2
+
+
+def test_index_member_all_formats_dates(tmp_path):
+    write_sw_member(tmp_path, pd.DataFrame({
+        "l1_code": ["801010.SI"],
+        "l1_name": ["农林牧渔"],
+        "l2_code": ["801016.SI"],
+        "l2_name": ["种植业"],
+        "l3_code": ["850111.SI"],
+        "l3_name": ["种子"],
+        "ts_code": ["002041.SZ"],
+        "name": ["登海种业"],
+        "in_date": [date(2021, 12, 13)],
+        "out_date": [date(2022, 6, 30)],
+        "is_new": ["N"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.index_member_all(ts_code="002041.SZ")
+    assert result.iloc[0]["in_date"] == "20211213"
+    assert result.iloc[0]["out_date"] == "20220630"
+
+
+def test_ci_index_member_filters_by_ts_code(tmp_path):
+    write_ci_member(tmp_path, pd.DataFrame({
+        "l1_code": ["CI005001.CI", "CI005002.CI"],
+        "l1_name": ["农林牧渔", "采掘"],
+        "l2_code": ["CI005005.CI", "CI005010.CI"],
+        "l2_name": ["农产品加工", "煤炭开采"],
+        "l3_code": ["CI005006.CI", "CI005011.CI"],
+        "l3_name": ["粮油加工", "动力煤"],
+        "ts_code": ["000876.SZ", "601088.SH"],
+        "name": ["新 希 望", "中国神华"],
+        "in_date": [date(2020, 1, 1), date(2020, 1, 1)],
+        "out_date": [None, None],
+        "is_new": ["Y", "Y"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.ci_index_member(ts_code="000876.SZ")
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "000876.SZ"
+
+
+def test_ci_index_member_filters_by_is_new(tmp_path):
+    write_ci_member(tmp_path, pd.DataFrame({
+        "l1_code": ["CI005001.CI", "CI005001.CI"],
+        "l1_name": ["农林牧渔", "农林牧渔"],
+        "l2_code": ["CI005005.CI", "CI005005.CI"],
+        "l2_name": ["农产品加工", "农产品加工"],
+        "l3_code": ["CI005006.CI", "CI005006.CI"],
+        "l3_name": ["粮油加工", "粮油加工"],
+        "ts_code": ["000876.SZ", "000877.SZ"],
+        "name": ["新 希 望", "天山股份"],
+        "in_date": [date(2020, 1, 1), date(2020, 1, 1)],
+        "out_date": [date(2023, 12, 31), None],
+        "is_new": ["N", "Y"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.ci_index_member(is_new="Y")
+    assert len(result) == 1
+
+
+def test_ci_index_member_formats_dates(tmp_path):
+    write_ci_member(tmp_path, pd.DataFrame({
+        "l1_code": ["CI005001.CI"],
+        "l1_name": ["农林牧渔"],
+        "l2_code": ["CI005005.CI"],
+        "l2_name": ["农产品加工"],
+        "l3_code": ["CI005006.CI"],
+        "l3_name": ["粮油加工"],
+        "ts_code": ["000876.SZ"],
+        "name": ["新 希 望"],
+        "in_date": [date(2020, 1, 1)],
+        "out_date": [date(2023, 12, 31)],
+        "is_new": ["N"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.ci_index_member(ts_code="000876.SZ")
+    assert result.iloc[0]["in_date"] == "20200101"
+    assert result.iloc[0]["out_date"] == "20231231"
+
+
+def test_query_dispatches_index_classify(tmp_path):
+    write_sw_classify(tmp_path, pd.DataFrame({
+        "index_code": ["801010.SI"],
+        "industry_name": ["农林牧渔"],
+        "level": ["L1"],
+        "parent_code": ["0"],
+        "industry_code": ["110000"],
+        "is_pub": ["1"],
+        "src": ["SW2021"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.query("index_classify")
+    assert len(result) == 1
+
+
+def test_query_dispatches_index_member_all(tmp_path):
+    write_sw_member(tmp_path, pd.DataFrame({
+        "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
+        "l2_code": ["801016.SI"], "l2_name": ["种植业"],
+        "l3_code": ["850111.SI"], "l3_name": ["种子"],
+        "ts_code": ["002041.SZ"], "name": ["登海种业"],
+        "in_date": [date(2021, 12, 13)], "out_date": [None], "is_new": ["Y"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.query("index_member_all", ts_code="002041.SZ")
+    assert len(result) == 1
+
+
+def test_query_dispatches_ci_index_member(tmp_path):
+    write_ci_member(tmp_path, pd.DataFrame({
+        "l1_code": ["CI005001.CI"], "l1_name": ["农林牧渔"],
+        "l2_code": ["CI005005.CI"], "l2_name": ["农产品加工"],
+        "l3_code": ["CI005006.CI"], "l3_name": ["粮油加工"],
+        "ts_code": ["000876.SZ"], "name": ["新 希 望"],
+        "in_date": [date(2020, 1, 1)], "out_date": [None], "is_new": ["Y"],
+    }))
+    pro = LocalPro(tmp_path)
+    result = pro.query("ci_index_member", ts_code="000876.SZ")
+    assert len(result) == 1
+
+
+def test_index_classify_raises_file_not_found_with_sync_hint(tmp_path):
+    pro = LocalPro(tmp_path)
+    with pytest.raises(FileNotFoundError, match="sync --table industry"):
+        pro.index_classify()
+
+
+def test_index_member_all_raises_file_not_found_with_sync_hint(tmp_path):
+    pro = LocalPro(tmp_path)
+    with pytest.raises(FileNotFoundError, match="sync --table industry"):
+        pro.index_member_all()
+
+
+def test_ci_index_member_raises_file_not_found_with_sync_hint(tmp_path):
+    pro = LocalPro(tmp_path)
+    with pytest.raises(FileNotFoundError, match="sync --table ci_member"):
+        pro.ci_index_member()

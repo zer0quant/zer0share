@@ -36,6 +36,8 @@ SYNC_TABLES = [
     "suspend_d",
     "stk_limit",
     "index_weight",
+    "industry",
+    "ci_member",
 ]
 
 
@@ -118,6 +120,10 @@ def sync(
                 start_date=parsed_start_date,
                 end_date=parsed_end_date,
             )
+        if sync_all or table == "industry":
+            pipeline.sync_industry()
+        if sync_all or table == "ci_member":
+            pipeline.sync_ci_member()
 
 
 @cli.command("build-universe")

@@ -99,3 +99,58 @@ def test_build_universe_rejects_date_with_range():
 
     assert result.exit_code != 0
     assert "--date cannot be used with --start-date or --end-date" in result.output
+
+
+def test_sync_industry_calls_pipeline():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(cli, ["sync", "--table", "industry"])
+
+    assert result.exit_code == 0
+    pipeline.sync_industry.assert_called_once()
+
+
+def test_sync_ci_member_calls_pipeline():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(cli, ["sync", "--table", "ci_member"])
+
+    assert result.exit_code == 0
+    pipeline.sync_ci_member.assert_called_once()
+
+
+def test_sync_all_includes_industry_and_ci_member():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(cli, ["sync", "--all"])
+
+    assert result.exit_code == 0
+    pipeline.sync_industry.assert_called_once()
+    pipeline.sync_ci_member.assert_called_once()
+
+
+def test_sync_industry_rejects_date_range():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(
+            cli, ["sync", "--table", "industry", "--start-date", "2024-01-01"]
+        )
+
+    assert result.exit_code != 0
+    assert "date range options" in result.output

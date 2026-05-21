@@ -15,7 +15,7 @@ A-股数据本地化管道，基于 [Tushare Pro](https://tushare.pro) 拉取股
 
 ## 特性
 
-- **核心数据同步**：支持交易日历、股票基础信息、日线行情、复权因子、每日指标、ST、停复牌、涨跌停价格、指数成分
+- **核心数据同步**：支持交易日历、股票基础信息、日线行情、复权因子、每日指标、ST、停复牌、涨跌停价格、指数成分、行业映射
 - **本地优先存储**：Parquet 分区文件 + DuckDB 元数据，无需数据库服务
 - **Tushare-like 查询**：本地 `pro_api()` 直接返回 DataFrame，不消耗 Tushare 积分
 - **复权行情**：本地 `pro_bar()` 支持不复权、前复权（qfq）和后复权（hfq）
@@ -26,7 +26,7 @@ A-股数据本地化管道，基于 [Tushare Pro](https://tushare.pro) 拉取股
 
 - Python 3.11+
 - [uv](https://github.com/astral-sh/uv)
-- Tushare Pro Token（基础行情需积分 ≥ 2000；`stock_st` 需积分 ≥ 3000）
+- Tushare Pro Token（基础行情需积分 ≥ 2000；`stock_st` 需积分 ≥ 3000；中信行业成分需积分 ≥ 5000）
 
 ## 快速开始
 
@@ -67,6 +67,8 @@ uv run python main.py sync --table stock_st     # 每日 ST 股票列表
 uv run python main.py sync --table suspend_d    # 每日停牌列表
 uv run python main.py sync --table stk_limit    # 每日涨跌停价格
 uv run python main.py sync --table index_weight # 沪深300/中证500/中证1000成分
+uv run python main.py sync --table industry    # 申万行业分类 + 成分映射
+uv run python main.py sync --table ci_member   # 中信行业成分映射
 ```
 
 首次验证建议先同步一个小区间，确认 Tushare 权限和字段可用后再全量回填：
@@ -151,6 +153,11 @@ suspend = pro.suspend_d(trade_date="20240131")
 limit = pro.stk_limit(trade_date="20240131")
 hs300 = pro.index_weight(index_code="399300.SZ", start_date="20240101", end_date="20240131")
 
+# 行业数据（用于行业中性化）
+sw_industries = pro.index_classify(level="L1", src="SW2021")       # 申万一级行业列表
+sw_member = pro.index_member_all(ts_code="000001.SZ", is_new="Y")  # 查股票所属申万行业
+ci_member = pro.ci_index_member(ts_code="000001.SZ", is_new="Y")   # 查股票所属中信行业
+
 qfq = pro.pro_bar(
     ts_code="000001.SZ",
     start_date="20240101",
@@ -172,6 +179,9 @@ qfq = pro.pro_bar(
 | `suspend_d` | 查询已同步的每日停复牌信息 |
 | `stk_limit` | 查询已同步的每日涨跌停价格 |
 | `index_weight` | 查询已同步的指数成分和权重 |
+| `index_classify` | 查询申万行业分类树（L1/L2/L3） |
+| `index_member_all` | 查询申万股票-行业映射（支持历史变更） |
+| `ci_index_member` | 查询中信股票-行业映射（支持历史变更） |
 | `pro_bar` | 查询本地 A 股日线行情，支持不复权、前复权（qfq）和后复权（hfq） |
 | `query` | 按接口名分发，例如 `pro.query("daily", ...)` |
 
@@ -210,6 +220,10 @@ data/
 │   ├── index_code=399300.SZ/date=20160104/data.parquet
 │   ├── index_code=000905.SH/date=20160104/data.parquet
 │   └── index_code=000852.SH/date=20160104/data.parquet
+├── industry/
+│   ├── sw_classify/data.parquet       # 申万行业分类树
+│   ├── sw_member/data.parquet         # 申万股票-行业映射（全量历史）
+│   └── ci_member/data.parquet         # 中信股票-行业映射（全量历史）
 └── universe/
     ├── name=univ_research_base/date=20240131/data.parquet
     ├── name=univ_trade_base/date=20240131/data.parquet
@@ -233,6 +247,8 @@ db/
 | `sync --table suspend_d` | 增量同步每日停复牌信息 |
 | `sync --table stk_limit` | 增量同步每日涨跌停价格 |
 | `sync --table index_weight` | 增量同步指数成分和权重 |
+| `sync --table industry` | 同步申万行业分类 + 成分映射（全量覆盖） |
+| `sync --table ci_member` | 同步中信行业成分映射（全量覆盖） |
 | `sync --all` | 按顺序同步全部 |
 | `build-universe` | 从 2016-01-01 到今天增量构建 5 个股票池 |
 | `build-universe --start-date YYYY-MM-DD --end-date YYYY-MM-DD` | 构建指定区间的 5 个股票池 |

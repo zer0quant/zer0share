@@ -1,5 +1,6 @@
 import pandas as pd
 import pytest
+import time
 from datetime import date
 from unittest.mock import patch
 
@@ -24,6 +25,21 @@ BASIC_COLS = [
     "is_hs",
     "act_name",
     "act_ent_type",
+]
+
+SW_CLASSIFY_COLS = [
+    "index_code", "industry_name", "level", "parent_code",
+    "industry_code", "is_pub", "src",
+]
+SW_MEMBER_COLS = [
+    "l1_code", "l1_name", "l2_code", "l2_name",
+    "l3_code", "l3_name", "ts_code", "name",
+    "in_date", "out_date", "is_new",
+]
+CI_MEMBER_COLS = [
+    "l1_code", "l1_name", "l2_code", "l2_name",
+    "l3_code", "l3_name", "ts_code", "name",
+    "in_date", "out_date", "is_new",
 ]
 
 
@@ -186,3 +202,151 @@ def test_fetch_trade_cal_returns_empty_when_none(mock_pro):
     fetcher = TushareFetcher("fake_token")
     df = fetcher.fetch_trade_cal("SSE")
     assert df.empty
+
+
+def test_fetch_sw_classify_calls_all_levels(mock_pro):
+    l1_df = pd.DataFrame({
+        "index_code": ["801010.SI"],
+        "industry_name": ["农林牧渔"],
+        "level": ["L1"],
+        "parent_code": ["0"],
+        "industry_code": ["110000"],
+        "is_pub": ["1"],
+    })
+    l2_df = pd.DataFrame({
+        "index_code": ["801016.SI"],
+        "industry_name": ["种植业"],
+        "level": ["L2"],
+        "parent_code": ["110000"],
+        "industry_code": ["110100"],
+        "is_pub": ["1"],
+    })
+    l3_df = pd.DataFrame({
+        "index_code": ["850111.SI"],
+        "industry_name": ["种子"],
+        "level": ["L3"],
+        "parent_code": ["110100"],
+        "industry_code": ["110101"],
+        "is_pub": ["1"],
+    })
+    mock_pro.index_classify.side_effect = [l1_df, l2_df, l3_df]
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_sw_classify()
+
+    assert list(df.columns) == SW_CLASSIFY_COLS
+    assert len(df) == 3
+    mock_pro.index_classify.assert_any_call(level="L1", src="SW2021")
+    mock_pro.index_classify.assert_any_call(level="L2", src="SW2021")
+    mock_pro.index_classify.assert_any_call(level="L3", src="SW2021")
+
+
+def test_fetch_sw_member_iterates_l1_codes(mock_pro):
+    l1_df = pd.DataFrame({
+        "index_code": ["801010.SI", "801030.SI"],
+        "industry_name": ["农林牧渔", "化工"],
+        "level": ["L1", "L1"],
+    })
+    mock_pro.index_classify.return_value = l1_df
+    member_dfs = [
+        pd.DataFrame({
+            "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
+            "l2_code": ["801016.SI"], "l2_name": ["种植业"],
+            "l3_code": ["850111.SI"], "l3_name": ["种子"],
+            "ts_code": ["002041.SZ"], "name": ["登海种业"],
+            "in_date": ["20211213"], "out_date": [None], "is_new": ["Y"],
+        }),
+        pd.DataFrame({
+            "l1_code": ["801030.SI"], "l1_name": ["化工"],
+            "l2_code": ["801033.SI"], "l2_name": ["化学原料"],
+            "l3_code": ["850321.SI"], "l3_name": ["纯碱"],
+            "ts_code": ["600291.SH"], "name": ["西水股份"],
+            "in_date": ["20211213"], "out_date": [None], "is_new": ["Y"],
+        }),
+    ]
+    mock_pro.index_member_all.side_effect = member_dfs
+    fetcher = TushareFetcher("fake_token")
+
+    with patch("zer0share.fetcher.time.sleep"):
+        df = fetcher.fetch_sw_member()
+
+    assert list(df.columns) == SW_MEMBER_COLS
+    assert len(df) == 2
+    mock_pro.index_member_all.assert_any_call(l1_code="801010.SI", is_new="")
+    mock_pro.index_member_all.assert_any_call(l1_code="801030.SI", is_new="")
+
+
+def test_fetch_sw_member_converts_dates(mock_pro):
+    l1_df = pd.DataFrame({"index_code": ["801010.SI"], "industry_name": ["农林牧渔"], "level": ["L1"]})
+    mock_pro.index_classify.return_value = l1_df
+    mock_pro.index_member_all.return_value = pd.DataFrame({
+        "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
+        "l2_code": ["801016.SI"], "l2_name": ["种植业"],
+        "l3_code": ["850111.SI"], "l3_name": ["种子"],
+        "ts_code": ["002041.SZ"], "name": ["登海种业"],
+        "in_date": ["20211213"], "out_date": ["20220630"], "is_new": ["N"],
+    })
+    fetcher = TushareFetcher("fake_token")
+
+    with patch("zer0share.fetcher.time.sleep"):
+        df = fetcher.fetch_sw_member()
+
+    assert df.iloc[0]["in_date"] == date(2021, 12, 13)
+    assert df.iloc[0]["out_date"] == date(2022, 6, 30)
+
+
+def test_fetch_ci_member_iterates_l1_codes(mock_pro):
+    initial_df = pd.DataFrame({
+        "l1_code": ["CI005001.CI", "CI005002.CI"],
+        "l1_name": ["农林牧渔", "采掘"],
+    })
+    mock_pro.ci_index_member.return_value = initial_df
+    member_dfs = [
+        pd.DataFrame({
+            "l1_code": ["CI005001.CI"], "l1_name": ["农林牧渔"],
+            "l2_code": ["CI005005.CI"], "l2_name": ["农产品加工"],
+            "l3_code": ["CI005006.CI"], "l3_name": ["粮油加工"],
+            "ts_code": ["000876.SZ"], "name": ["新 希 望"],
+            "in_date": ["20200101"], "out_date": [None], "is_new": ["Y"],
+        }),
+        pd.DataFrame({
+            "l1_code": ["CI005002.CI"], "l1_name": ["采掘"],
+            "l2_code": ["CI005010.CI"], "l2_name": ["煤炭开采"],
+            "l3_code": ["CI005011.CI"], "l3_name": ["动力煤"],
+            "ts_code": ["601088.SH"], "name": ["中国神华"],
+            "in_date": ["20200101"], "out_date": [None], "is_new": ["Y"],
+        }),
+    ]
+    mock_pro.ci_index_member.side_effect = [initial_df] + member_dfs
+    fetcher = TushareFetcher("fake_token")
+
+    with patch("zer0share.fetcher.time.sleep"):
+        df = fetcher.fetch_ci_member()
+
+    assert list(df.columns) == CI_MEMBER_COLS
+    assert len(df) == 2
+    mock_pro.ci_index_member.assert_any_call(l1_code="CI005001.CI", is_new="")
+    mock_pro.ci_index_member.assert_any_call(l1_code="CI005002.CI", is_new="")
+
+
+def test_fetch_ci_member_converts_dates(mock_pro):
+    initial_df = pd.DataFrame({
+        "l1_code": ["CI005001.CI"], "l1_name": ["农林牧渔"],
+    })
+    mock_pro.ci_index_member.side_effect = [
+        initial_df,
+        pd.DataFrame({
+            "l1_code": ["CI005001.CI"], "l1_name": ["农林牧渔"],
+            "l2_code": ["CI005005.CI"], "l2_name": ["农产品加工"],
+            "l3_code": ["CI005006.CI"], "l3_name": ["粮油加工"],
+            "ts_code": ["000876.SZ"], "name": ["新 希 望"],
+            "in_date": ["20200101"], "out_date": ["20231231"], "is_new": ["N"],
+        }),
+    ]
+    fetcher = TushareFetcher("fake_token")
+
+    with patch("zer0share.fetcher.time.sleep"):
+        df = fetcher.fetch_ci_member()
+
+    assert df.iloc[0]["in_date"] == date(2020, 1, 1)
+    assert df.iloc[0]["out_date"] == date(2023, 12, 31)

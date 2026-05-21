@@ -1,5 +1,6 @@
 import tushare as ts
 import pandas as pd
+import time
 from datetime import date
 from loguru import logger
 
@@ -53,6 +54,20 @@ STOCK_ST_COLS = ["ts_code", "name", "trade_date", "type", "type_name"]
 SUSPEND_D_COLS = ["ts_code", "trade_date", "suspend_timing", "suspend_type"]
 STK_LIMIT_COLS = ["trade_date", "ts_code", "pre_close", "up_limit", "down_limit"]
 INDEX_WEIGHT_COLS = ["index_code", "con_code", "trade_date", "weight"]
+SW_CLASSIFY_COLS = [
+    "index_code", "industry_name", "level", "parent_code",
+    "industry_code", "is_pub", "src",
+]
+SW_MEMBER_COLS = [
+    "l1_code", "l1_name", "l2_code", "l2_name",
+    "l3_code", "l3_name", "ts_code", "name",
+    "in_date", "out_date", "is_new",
+]
+CI_MEMBER_COLS = [
+    "l1_code", "l1_name", "l2_code", "l2_name",
+    "l3_code", "l3_name", "ts_code", "name",
+    "in_date", "out_date", "is_new",
+]
 
 
 class TushareFetcher:
@@ -172,6 +187,61 @@ class TushareFetcher:
         df["is_open"] = df["is_open"].astype(str).map({"1": True, "0": False}).astype(object)
         return df[TRADE_CAL_COLS]
 
+    def fetch_sw_classify(self, src: str = "SW2021") -> pd.DataFrame:
+        logger.info(f"拉取申万行业分类: {src}")
+        frames = []
+        for level in ("L1", "L2", "L3"):
+            df = self._pro.index_classify(level=level, src=src)
+            if df is not None and not df.empty:
+                df["src"] = src
+                frames.append(df)
+        if not frames:
+            return pd.DataFrame(columns=SW_CLASSIFY_COLS)
+        result = pd.concat(frames, ignore_index=True)
+        return result[SW_CLASSIFY_COLS]
+
+    def fetch_sw_member(self) -> pd.DataFrame:
+        l1_df = self._pro.index_classify(level="L1", src="SW2021")
+        if l1_df is None or l1_df.empty:
+            return pd.DataFrame(columns=SW_MEMBER_COLS)
+        l1_codes = l1_df["index_code"].tolist()
+        logger.info(f"拉取申万行业成分: {len(l1_codes)} 个一级行业")
+        frames = []
+        for l1_code in l1_codes:
+            df = self._pro.index_member_all(l1_code=l1_code, is_new="")
+            time.sleep(0.2)
+            if df is not None and not df.empty:
+                frames.append(df)
+        if not frames:
+            return pd.DataFrame(columns=SW_MEMBER_COLS)
+        result = (
+            pd.concat(frames, ignore_index=True)
+            .drop_duplicates(subset=["ts_code", "l3_code", "in_date"], keep="last")
+            .reset_index(drop=True)
+        )
+        return _format_industry_dates(result, SW_MEMBER_COLS)
+
+    def fetch_ci_member(self) -> pd.DataFrame:
+        initial_df = self._pro.ci_index_member()
+        if initial_df is None or initial_df.empty:
+            return pd.DataFrame(columns=CI_MEMBER_COLS)
+        l1_codes = initial_df["l1_code"].unique().tolist()
+        logger.info(f"拉取中信行业成分: {len(l1_codes)} 个一级行业")
+        frames = []
+        for l1_code in l1_codes:
+            df = self._pro.ci_index_member(l1_code=l1_code, is_new="")
+            time.sleep(0.2)
+            if df is not None and not df.empty:
+                frames.append(df)
+        if not frames:
+            return pd.DataFrame(columns=CI_MEMBER_COLS)
+        result = (
+            pd.concat(frames, ignore_index=True)
+            .drop_duplicates(subset=["ts_code", "l3_code", "in_date"], keep="last")
+            .reset_index(drop=True)
+        )
+        return _format_industry_dates(result, CI_MEMBER_COLS)
+
 
 def _format_trade_date(df: pd.DataFrame | None, columns: list[str]) -> pd.DataFrame:
     if df is None or df.empty:
@@ -179,4 +249,14 @@ def _format_trade_date(df: pd.DataFrame | None, columns: list[str]) -> pd.DataFr
     df["trade_date"] = pd.to_datetime(
         df["trade_date"], format="%Y%m%d", errors="coerce"
     ).dt.date
+    return df[columns]
+
+
+def _format_industry_dates(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    if df is None or df.empty:
+        return pd.DataFrame(columns=columns)
+    for col in ("in_date", "out_date"):
+        df[col] = pd.to_datetime(df[col], format="%Y%m%d", errors="coerce").apply(
+            lambda x: x.date() if not pd.isna(x) and not pd.isnull(x) else None
+        )
     return df[columns]

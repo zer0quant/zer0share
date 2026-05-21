@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from zer0share.pipeline import Pipeline, EXCHANGES
-from zer0share.storage import write_basic, write_trade_cal
+from zer0share.storage import read_sw_classify, read_sw_member, read_ci_member, write_basic, write_trade_cal
 
 
 def _basic_df() -> pd.DataFrame:
@@ -564,3 +564,71 @@ def test_sync_index_weight_does_not_use_global_meta_for_new_index_meta(pipeline)
         "399300.SZ", date(2024, 1, 1), date(2024, 1, 31)
     )
     assert pipeline._meta.get_last_date("index_weight:399300.SZ") == date(2024, 1, 31)
+
+
+def test_sync_industry_writes_sw_classify_and_member(pipeline, cfg):
+    classify_df = pd.DataFrame({
+        "index_code": ["801010.SI"],
+        "industry_name": ["农林牧渔"],
+        "level": ["L1"],
+        "parent_code": ["0"],
+        "industry_code": ["110000"],
+        "is_pub": ["1"],
+        "src": ["SW2021"],
+    })
+    member_df = pd.DataFrame({
+        "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
+        "l2_code": ["801016.SI"], "l2_name": ["种植业"],
+        "l3_code": ["850111.SI"], "l3_name": ["种子"],
+        "ts_code": ["002041.SZ"], "name": ["登海种业"],
+        "in_date": [date(2021, 12, 13)], "out_date": [None], "is_new": ["Y"],
+    })
+    pipeline._fetcher.fetch_sw_classify.return_value = classify_df
+    pipeline._fetcher.fetch_sw_member.return_value = member_df
+
+    with patch("zer0share.pipeline.date") as mock_date:
+        mock_date.today.return_value = date(2024, 5, 18)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_industry()
+
+    assert read_sw_classify(cfg.data_dir).equals(classify_df)
+    assert read_sw_member(cfg.data_dir).equals(member_df)
+    assert pipeline._meta.get_last_date("sw_classify") == date(2024, 5, 18)
+    assert pipeline._meta.get_last_date("sw_member") == date(2024, 5, 18)
+
+
+def test_sync_industry_failure_sends_alert_and_raises(pipeline):
+    pipeline._fetcher.fetch_sw_classify.side_effect = RuntimeError("API error")
+    with pytest.raises(RuntimeError):
+        pipeline.sync_industry()
+    pipeline._notifier.send.assert_called_once()
+    msg = pipeline._notifier.send.call_args[0][0]
+    assert "industry 同步失败" in msg
+
+
+def test_sync_ci_member_writes_parquet(pipeline, cfg):
+    member_df = pd.DataFrame({
+        "l1_code": ["CI005001.CI"], "l1_name": ["农林牧渔"],
+        "l2_code": ["CI005005.CI"], "l2_name": ["农产品加工"],
+        "l3_code": ["CI005006.CI"], "l3_name": ["粮油加工"],
+        "ts_code": ["000876.SZ"], "name": ["新 希 望"],
+        "in_date": [date(2020, 1, 1)], "out_date": [None], "is_new": ["Y"],
+    })
+    pipeline._fetcher.fetch_ci_member.return_value = member_df
+
+    with patch("zer0share.pipeline.date") as mock_date:
+        mock_date.today.return_value = date(2024, 5, 18)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_ci_member()
+
+    assert read_ci_member(cfg.data_dir).equals(member_df)
+    assert pipeline._meta.get_last_date("ci_member") == date(2024, 5, 18)
+
+
+def test_sync_ci_member_failure_sends_alert_and_raises(pipeline):
+    pipeline._fetcher.fetch_ci_member.side_effect = RuntimeError("API error")
+    with pytest.raises(RuntimeError):
+        pipeline.sync_ci_member()
+    pipeline._notifier.send.assert_called_once()
+    msg = pipeline._notifier.send.call_args[0][0]
+    assert "ci_member 同步失败" in msg

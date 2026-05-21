@@ -16,9 +16,12 @@ from zer0share.storage import (
     read_trade_cal,
     write_adj_factor,
     write_basic,
+    write_ci_member,
     write_daily_partition,
     write_daily_kline,
     write_index_weight,
+    write_sw_classify,
+    write_sw_member,
     write_trade_cal,
 )
 
@@ -449,6 +452,35 @@ class Pipeline:
         )
         logger.info(msg)
         self._notifier.send(msg)
+
+    def sync_industry(self) -> None:
+        today = date.today()
+        try:
+            df = self._fetcher.fetch_sw_classify()
+            write_sw_classify(self._cfg.data_dir, df)
+            self._meta.update_last_date("sw_classify", today)
+            logger.info(f"sw_classify 同步完成: {len(df)} 条")
+
+            df = self._fetcher.fetch_sw_member()
+            write_sw_member(self._cfg.data_dir, df)
+            self._meta.update_last_date("sw_member", today)
+            logger.info(f"sw_member 同步完成: {len(df)} 条")
+        except Exception as e:
+            logger.error(f"industry 同步失败: {e}")
+            self._notifier.send(f"industry 同步失败: {e}")
+            raise
+
+    def sync_ci_member(self) -> None:
+        today = date.today()
+        try:
+            df = self._fetcher.fetch_ci_member()
+            write_ci_member(self._cfg.data_dir, df)
+            self._meta.update_last_date("ci_member", today)
+            logger.info(f"ci_member 同步完成: {len(df)} 条")
+        except Exception as e:
+            logger.error(f"ci_member 同步失败: {e}")
+            self._notifier.send(f"ci_member 同步失败: {e}")
+            raise
 
     def _sync_daily_partitioned(
         self,

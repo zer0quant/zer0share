@@ -3,7 +3,22 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from zer0share.storage import MetaStore, daily_kline_partition_exists, read_basic, read_daily_kline, write_basic, write_daily_kline, write_trade_cal, read_trade_cal
+from zer0share.storage import (
+    MetaStore,
+    daily_kline_partition_exists,
+    read_basic,
+    read_ci_member,
+    read_daily_kline,
+    read_sw_classify,
+    read_sw_member,
+    read_trade_cal,
+    write_basic,
+    write_ci_member,
+    write_daily_kline,
+    write_sw_classify,
+    write_sw_member,
+    write_trade_cal,
+)
 
 
 FULL_BASIC_COLUMNS = [
@@ -313,3 +328,186 @@ def test_get_trading_days_exchange_isolation(tmp_path):
         szse_days = store.get_trading_days("SZSE", date(2024, 1, 1), date(2024, 1, 6))
     assert sse_days == [date(2024, 1, 2)]
     assert szse_days == [date(2024, 1, 3)]
+
+
+def test_write_and_read_sw_classify(tmp_path):
+    df = pd.DataFrame(
+        {
+            "index_code": ["801010.SI", "801030.SI"],
+            "industry_name": ["农林牧渔", "化工"],
+            "level": ["L1", "L1"],
+            "parent_code": ["0", "0"],
+            "industry_code": ["110000", "220000"],
+            "is_pub": ["1", "1"],
+            "src": ["SW2021", "SW2021"],
+        }
+    )
+    write_sw_classify(tmp_path, df)
+    result = read_sw_classify(tmp_path)
+    assert len(result) == 2
+    assert result.iloc[0]["industry_name"] == "农林牧渔"
+    assert (tmp_path / "industry" / "sw_classify" / "data.parquet").exists()
+
+
+def test_sw_classify_overwrites_on_second_write(tmp_path):
+    df1 = pd.DataFrame(
+        {
+            "index_code": ["801010.SI"],
+            "industry_name": ["农林牧渔"],
+            "level": ["L1"],
+            "parent_code": ["0"],
+            "industry_code": ["110000"],
+            "is_pub": ["1"],
+            "src": ["SW2021"],
+        }
+    )
+    df2 = pd.DataFrame(
+        {
+            "index_code": ["801010.SI", "801030.SI"],
+            "industry_name": ["农林牧渔", "化工"],
+            "level": ["L1", "L1"],
+            "parent_code": ["0", "0"],
+            "industry_code": ["110000", "220000"],
+            "is_pub": ["1", "1"],
+            "src": ["SW2021", "SW2021"],
+        }
+    )
+    write_sw_classify(tmp_path, df1)
+    write_sw_classify(tmp_path, df2)
+    result = read_sw_classify(tmp_path)
+    assert len(result) == 2
+
+
+def test_read_sw_classify_returns_empty_if_not_exists(tmp_path):
+    result = read_sw_classify(tmp_path)
+    assert result.empty
+
+
+def test_write_and_read_sw_member(tmp_path):
+    df = pd.DataFrame(
+        {
+            "l1_code": ["801010.SI", "801010.SI"],
+            "l1_name": ["农林牧渔", "农林牧渔"],
+            "l2_code": ["801016.SI", "801016.SI"],
+            "l2_name": ["种植业", "种植业"],
+            "l3_code": ["850111.SI", "850112.SI"],
+            "l3_name": ["种子", "粮食种植"],
+            "ts_code": ["002041.SZ", "600313.SH"],
+            "name": ["登海种业", "农发种业"],
+            "in_date": [date(2021, 12, 13), date(2021, 12, 13)],
+            "out_date": [None, None],
+            "is_new": ["Y", "Y"],
+        }
+    )
+    write_sw_member(tmp_path, df)
+    result = read_sw_member(tmp_path)
+    assert len(result) == 2
+    assert result.iloc[0]["ts_code"] == "002041.SZ"
+    assert (tmp_path / "industry" / "sw_member" / "data.parquet").exists()
+
+
+def test_sw_member_overwrites_on_second_write(tmp_path):
+    df1 = pd.DataFrame(
+        {
+            "l1_code": ["801010.SI"],
+            "l1_name": ["农林牧渔"],
+            "l2_code": ["801016.SI"],
+            "l2_name": ["种植业"],
+            "l3_code": ["850111.SI"],
+            "l3_name": ["种子"],
+            "ts_code": ["002041.SZ"],
+            "name": ["登海种业"],
+            "in_date": [date(2021, 12, 13)],
+            "out_date": [None],
+            "is_new": ["Y"],
+        }
+    )
+    df2 = pd.DataFrame(
+        {
+            "l1_code": ["801010.SI", "801010.SI"],
+            "l1_name": ["农林牧渔", "农林牧渔"],
+            "l2_code": ["801016.SI", "801016.SI"],
+            "l2_name": ["种植业", "种植业"],
+            "l3_code": ["850111.SI", "850112.SI"],
+            "l3_name": ["种子", "粮食种植"],
+            "ts_code": ["002041.SZ", "600313.SH"],
+            "name": ["登海种业", "农发种业"],
+            "in_date": [date(2021, 12, 13), date(2021, 12, 13)],
+            "out_date": [None, None],
+            "is_new": ["Y", "Y"],
+        }
+    )
+    write_sw_member(tmp_path, df1)
+    write_sw_member(tmp_path, df2)
+    result = read_sw_member(tmp_path)
+    assert len(result) == 2
+
+
+def test_read_sw_member_returns_empty_if_not_exists(tmp_path):
+    result = read_sw_member(tmp_path)
+    assert result.empty
+
+
+def test_write_and_read_ci_member(tmp_path):
+    df = pd.DataFrame(
+        {
+            "l1_code": ["CI005001.CI", "CI005001.CI"],
+            "l1_name": ["农林牧渔", "农林牧渔"],
+            "l2_code": ["CI005005.CI", "CI005005.CI"],
+            "l2_name": ["农产品加工", "农产品加工"],
+            "l3_code": ["CI005006.CI", "CI005007.CI"],
+            "l3_name": ["粮油加工", "果蔬加工"],
+            "ts_code": ["000876.SZ", "600737.SH"],
+            "name": ["新 希 望", "中粮糖业"],
+            "in_date": [date(2020, 1, 1), date(2020, 1, 1)],
+            "out_date": [None, None],
+            "is_new": ["Y", "Y"],
+        }
+    )
+    write_ci_member(tmp_path, df)
+    result = read_ci_member(tmp_path)
+    assert len(result) == 2
+    assert result.iloc[0]["ts_code"] == "000876.SZ"
+    assert (tmp_path / "industry" / "ci_member" / "data.parquet").exists()
+
+
+def test_ci_member_overwrites_on_second_write(tmp_path):
+    df1 = pd.DataFrame(
+        {
+            "l1_code": ["CI005001.CI"],
+            "l1_name": ["农林牧渔"],
+            "l2_code": ["CI005005.CI"],
+            "l2_name": ["农产品加工"],
+            "l3_code": ["CI005006.CI"],
+            "l3_name": ["粮油加工"],
+            "ts_code": ["000876.SZ"],
+            "name": ["新 希 望"],
+            "in_date": [date(2020, 1, 1)],
+            "out_date": [None],
+            "is_new": ["Y"],
+        }
+    )
+    df2 = pd.DataFrame(
+        {
+            "l1_code": ["CI005001.CI", "CI005002.CI"],
+            "l1_name": ["农林牧渔", "采掘"],
+            "l2_code": ["CI005005.CI", "CI005010.CI"],
+            "l2_name": ["农产品加工", "煤炭开采"],
+            "l3_code": ["CI005006.CI", "CI005011.CI"],
+            "l3_name": ["粮油加工", "动力煤"],
+            "ts_code": ["000876.SZ", "601088.SH"],
+            "name": ["新 希 望", "中国神华"],
+            "in_date": [date(2020, 1, 1), date(2020, 1, 1)],
+            "out_date": [None, None],
+            "is_new": ["Y", "Y"],
+        }
+    )
+    write_ci_member(tmp_path, df1)
+    write_ci_member(tmp_path, df2)
+    result = read_ci_member(tmp_path)
+    assert len(result) == 2
+
+
+def test_read_ci_member_returns_empty_if_not_exists(tmp_path):
+    result = read_ci_member(tmp_path)
+    assert result.empty

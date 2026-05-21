@@ -204,3 +204,45 @@ def read_trade_cal(data_dir: Path, exchange: str) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame()
     return pq.read_table(path, schema=pq.read_schema(path)).to_pandas()
+
+
+def write_sw_classify(data_dir: Path, df: pd.DataFrame) -> None:
+    classify_dir = data_dir / "industry" / "sw_classify"
+    classify_dir.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_pandas(df, preserve_index=False)
+    pq.write_table(table, classify_dir / "data.parquet")
+
+
+def read_sw_classify(data_dir: Path) -> pd.DataFrame:
+    path = data_dir / "industry" / "sw_classify" / "data.parquet"
+    if not path.exists():
+        return pd.DataFrame()
+    return pq.read_table(path).to_pandas()
+
+
+def write_sw_member(data_dir: Path, df: pd.DataFrame) -> None:
+    member_dir = data_dir / "industry" / "sw_member"
+    member_dir.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_pandas(df, preserve_index=False)
+    pq.write_table(table, member_dir / "data.parquet")
+
+
+def read_sw_member(data_dir: Path) -> pd.DataFrame:
+    path = data_dir / "industry" / "sw_member" / "data.parquet"
+    if not path.exists():
+        return pd.DataFrame()
+    return pq.read_table(path).to_pandas()
+
+
+def write_ci_member(data_dir: Path, df: pd.DataFrame) -> None:
+    member_dir = data_dir / "industry" / "ci_member"
+    member_dir.mkdir(parents=True, exist_ok=True)
+    table = pa.Table.from_pandas(df, preserve_index=False)
+    pq.write_table(table, member_dir / "data.parquet")
+
+
+def read_ci_member(data_dir: Path) -> pd.DataFrame:
+    path = data_dir / "industry" / "ci_member" / "data.parquet"
+    if not path.exists():
+        return pd.DataFrame()
+    return pq.read_table(path).to_pandas()

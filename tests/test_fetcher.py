@@ -249,6 +249,7 @@ def test_fetch_sw_member_iterates_l1_codes(mock_pro):
     })
     mock_pro.index_classify.return_value = l1_df
     member_dfs = [
+        # 801010 is_new="Y"
         pd.DataFrame({
             "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
             "l2_code": ["801016.SI"], "l2_name": ["种植业"],
@@ -256,6 +257,15 @@ def test_fetch_sw_member_iterates_l1_codes(mock_pro):
             "ts_code": ["002041.SZ"], "name": ["登海种业"],
             "in_date": ["20211213"], "out_date": [None], "is_new": ["Y"],
         }),
+        # 801010 is_new="N"
+        pd.DataFrame({
+            "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
+            "l2_code": ["801016.SI"], "l2_name": ["种植业"],
+            "l3_code": ["850111.SI"], "l3_name": ["种子"],
+            "ts_code": ["600313.SH"], "name": ["农发种业"],
+            "in_date": ["20180101"], "out_date": ["20211213"], "is_new": ["N"],
+        }),
+        # 801030 is_new="Y"
         pd.DataFrame({
             "l1_code": ["801030.SI"], "l1_name": ["化工"],
             "l2_code": ["801033.SI"], "l2_name": ["化学原料"],
@@ -263,6 +273,10 @@ def test_fetch_sw_member_iterates_l1_codes(mock_pro):
             "ts_code": ["600291.SH"], "name": ["西水股份"],
             "in_date": ["20211213"], "out_date": [None], "is_new": ["Y"],
         }),
+        # 801030 is_new="N"
+        pd.DataFrame(columns=["l1_code", "l1_name", "l2_code", "l2_name",
+                               "l3_code", "l3_name", "ts_code", "name",
+                               "in_date", "out_date", "is_new"]),
     ]
     mock_pro.index_member_all.side_effect = member_dfs
     fetcher = TushareFetcher("fake_token")
@@ -271,26 +285,38 @@ def test_fetch_sw_member_iterates_l1_codes(mock_pro):
         df = fetcher.fetch_sw_member()
 
     assert list(df.columns) == SW_MEMBER_COLS
-    assert len(df) == 2
-    mock_pro.index_member_all.assert_any_call(l1_code="801010.SI", is_new="")
-    mock_pro.index_member_all.assert_any_call(l1_code="801030.SI", is_new="")
+    assert len(df) == 3
+    mock_pro.index_member_all.assert_any_call(l1_code="801010.SI", is_new="Y")
+    mock_pro.index_member_all.assert_any_call(l1_code="801010.SI", is_new="N")
+    mock_pro.index_member_all.assert_any_call(l1_code="801030.SI", is_new="Y")
+    mock_pro.index_member_all.assert_any_call(l1_code="801030.SI", is_new="N")
 
 
 def test_fetch_sw_member_converts_dates(mock_pro):
     l1_df = pd.DataFrame({"index_code": ["801010.SI"], "industry_name": ["农林牧渔"], "level": ["L1"]})
     mock_pro.index_classify.return_value = l1_df
-    mock_pro.index_member_all.return_value = pd.DataFrame({
-        "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
-        "l2_code": ["801016.SI"], "l2_name": ["种植业"],
-        "l3_code": ["850111.SI"], "l3_name": ["种子"],
-        "ts_code": ["002041.SZ"], "name": ["登海种业"],
-        "in_date": ["20211213"], "out_date": ["20220630"], "is_new": ["N"],
-    })
+    mock_pro.index_member_all.side_effect = [
+        pd.DataFrame({
+            "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
+            "l2_code": ["801016.SI"], "l2_name": ["种植业"],
+            "l3_code": ["850111.SI"], "l3_name": ["种子"],
+            "ts_code": ["002041.SZ"], "name": ["登海种业"],
+            "in_date": ["20211213"], "out_date": [None], "is_new": ["Y"],
+        }),
+        pd.DataFrame({
+            "l1_code": ["801010.SI"], "l1_name": ["农林牧渔"],
+            "l2_code": ["801016.SI"], "l2_name": ["种植业"],
+            "l3_code": ["850111.SI"], "l3_name": ["种子"],
+            "ts_code": ["002041.SZ"], "name": ["登海种业"],
+            "in_date": ["20211213"], "out_date": ["20220630"], "is_new": ["N"],
+        }),
+    ]
     fetcher = TushareFetcher("fake_token")
 
     with patch("zer0share.fetcher.time.sleep"):
         df = fetcher.fetch_sw_member()
 
+    assert len(df) == 1
     assert df.iloc[0]["in_date"] == date(2021, 12, 13)
     assert df.iloc[0]["out_date"] == date(2022, 6, 30)
 
@@ -302,6 +328,7 @@ def test_fetch_ci_member_iterates_l1_codes(mock_pro):
     })
     mock_pro.ci_index_member.return_value = initial_df
     member_dfs = [
+        # CI005001 is_new="Y"
         pd.DataFrame({
             "l1_code": ["CI005001.CI"], "l1_name": ["农林牧渔"],
             "l2_code": ["CI005005.CI"], "l2_name": ["农产品加工"],
@@ -309,6 +336,11 @@ def test_fetch_ci_member_iterates_l1_codes(mock_pro):
             "ts_code": ["000876.SZ"], "name": ["新 希 望"],
             "in_date": ["20200101"], "out_date": [None], "is_new": ["Y"],
         }),
+        # CI005001 is_new="N"
+        pd.DataFrame(columns=["l1_code", "l1_name", "l2_code", "l2_name",
+                               "l3_code", "l3_name", "ts_code", "name",
+                               "in_date", "out_date", "is_new"]),
+        # CI005002 is_new="Y"
         pd.DataFrame({
             "l1_code": ["CI005002.CI"], "l1_name": ["采掘"],
             "l2_code": ["CI005010.CI"], "l2_name": ["煤炭开采"],
@@ -316,6 +348,10 @@ def test_fetch_ci_member_iterates_l1_codes(mock_pro):
             "ts_code": ["601088.SH"], "name": ["中国神华"],
             "in_date": ["20200101"], "out_date": [None], "is_new": ["Y"],
         }),
+        # CI005002 is_new="N"
+        pd.DataFrame(columns=["l1_code", "l1_name", "l2_code", "l2_name",
+                               "l3_code", "l3_name", "ts_code", "name",
+                               "in_date", "out_date", "is_new"]),
     ]
     mock_pro.ci_index_member.side_effect = [initial_df] + member_dfs
     fetcher = TushareFetcher("fake_token")
@@ -325,8 +361,10 @@ def test_fetch_ci_member_iterates_l1_codes(mock_pro):
 
     assert list(df.columns) == CI_MEMBER_COLS
     assert len(df) == 2
-    mock_pro.ci_index_member.assert_any_call(l1_code="CI005001.CI", is_new="")
-    mock_pro.ci_index_member.assert_any_call(l1_code="CI005002.CI", is_new="")
+    mock_pro.ci_index_member.assert_any_call(l1_code="CI005001.CI", is_new="Y")
+    mock_pro.ci_index_member.assert_any_call(l1_code="CI005001.CI", is_new="N")
+    mock_pro.ci_index_member.assert_any_call(l1_code="CI005002.CI", is_new="Y")
+    mock_pro.ci_index_member.assert_any_call(l1_code="CI005002.CI", is_new="N")
 
 
 def test_fetch_ci_member_converts_dates(mock_pro):
@@ -335,6 +373,15 @@ def test_fetch_ci_member_converts_dates(mock_pro):
     })
     mock_pro.ci_index_member.side_effect = [
         initial_df,
+        # is_new="Y"
+        pd.DataFrame({
+            "l1_code": ["CI005001.CI"], "l1_name": ["农林牧渔"],
+            "l2_code": ["CI005005.CI"], "l2_name": ["农产品加工"],
+            "l3_code": ["CI005006.CI"], "l3_name": ["粮油加工"],
+            "ts_code": ["000876.SZ"], "name": ["新 希 望"],
+            "in_date": ["20200101"], "out_date": [None], "is_new": ["Y"],
+        }),
+        # is_new="N"
         pd.DataFrame({
             "l1_code": ["CI005001.CI"], "l1_name": ["农林牧渔"],
             "l2_code": ["CI005005.CI"], "l2_name": ["农产品加工"],
@@ -348,5 +395,6 @@ def test_fetch_ci_member_converts_dates(mock_pro):
     with patch("zer0share.fetcher.time.sleep"):
         df = fetcher.fetch_ci_member()
 
+    assert len(df) == 1
     assert df.iloc[0]["in_date"] == date(2020, 1, 1)
     assert df.iloc[0]["out_date"] == date(2023, 12, 31)

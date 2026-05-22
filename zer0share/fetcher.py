@@ -208,10 +208,11 @@ class TushareFetcher:
         logger.info(f"拉取申万行业成分: {len(l1_codes)} 个一级行业")
         frames = []
         for l1_code in l1_codes:
-            df = self._pro.index_member_all(l1_code=l1_code, is_new="")
-            time.sleep(0.2)
-            if df is not None and not df.empty:
-                frames.append(df)
+            for is_new in ("Y", "N"):
+                df = self._pro.index_member_all(l1_code=l1_code, is_new=is_new)
+                time.sleep(0.2)
+                if df is not None and not df.empty:
+                    frames.append(df)
         if not frames:
             return pd.DataFrame(columns=SW_MEMBER_COLS)
         result = (
@@ -229,10 +230,11 @@ class TushareFetcher:
         logger.info(f"拉取中信行业成分: {len(l1_codes)} 个一级行业")
         frames = []
         for l1_code in l1_codes:
-            df = self._pro.ci_index_member(l1_code=l1_code, is_new="")
-            time.sleep(0.2)
-            if df is not None and not df.empty:
-                frames.append(df)
+            for is_new in ("Y", "N"):
+                df = self._pro.ci_index_member(l1_code=l1_code, is_new=is_new)
+                time.sleep(0.2)
+                if df is not None and not df.empty:
+                    frames.append(df)
         if not frames:
             return pd.DataFrame(columns=CI_MEMBER_COLS)
         result = (

@@ -187,32 +187,36 @@ class TushareFetcher:
         df["is_open"] = df["is_open"].astype(str).map({"1": True, "0": False}).astype(object)
         return df[TRADE_CAL_COLS]
 
-    def fetch_sw_classify(self, src: str = "SW2021") -> pd.DataFrame:
-        logger.info(f"拉取申万行业分类: {src}")
+    SW_VERSIONS = ("SW2014", "SW2021")
+
+    def fetch_sw_classify(self) -> pd.DataFrame:
         frames = []
-        for level in ("L1", "L2", "L3"):
-            df = self._pro.index_classify(level=level, src=src)
-            if df is not None and not df.empty:
-                df["src"] = src
-                frames.append(df)
+        for src in self.SW_VERSIONS:
+            logger.info(f"拉取申万行业分类: {src}")
+            for level in ("L1", "L2", "L3"):
+                df = self._pro.index_classify(level=level, src=src)
+                if df is not None and not df.empty:
+                    df["src"] = src
+                    frames.append(df)
         if not frames:
             return pd.DataFrame(columns=SW_CLASSIFY_COLS)
         result = pd.concat(frames, ignore_index=True)
         return result[SW_CLASSIFY_COLS]
 
     def fetch_sw_member(self) -> pd.DataFrame:
-        l1_df = self._pro.index_classify(level="L1", src="SW2021")
-        if l1_df is None or l1_df.empty:
-            return pd.DataFrame(columns=SW_MEMBER_COLS)
-        l1_codes = l1_df["index_code"].tolist()
-        logger.info(f"拉取申万行业成分: {len(l1_codes)} 个一级行业")
         frames = []
-        for l1_code in l1_codes:
-            for is_new in ("Y", "N"):
-                df = self._pro.index_member_all(l1_code=l1_code, is_new=is_new)
-                time.sleep(0.2)
-                if df is not None and not df.empty:
-                    frames.append(df)
+        for src in self.SW_VERSIONS:
+            l1_df = self._pro.index_classify(level="L1", src=src)
+            if l1_df is None or l1_df.empty:
+                continue
+            l1_codes = l1_df["index_code"].tolist()
+            logger.info(f"拉取申万行业成分({src}): {len(l1_codes)} 个一级行业")
+            for l1_code in l1_codes:
+                for is_new in ("Y", "N"):
+                    df = self._pro.index_member_all(l1_code=l1_code, is_new=is_new)
+                    time.sleep(0.2)
+                    if df is not None and not df.empty:
+                        frames.append(df)
         if not frames:
             return pd.DataFrame(columns=SW_MEMBER_COLS)
         result = (

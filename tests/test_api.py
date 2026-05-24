@@ -906,3 +906,89 @@ def test_ci_index_member_raises_file_not_found_with_sync_hint(tmp_path):
     pro = LocalPro(tmp_path)
     with pytest.raises(FileNotFoundError, match="sync --table ci_member"):
         pro.ci_index_member()
+
+
+def _index_daily_partition(trade_date: date, ts_codes: list[str] | None = None) -> pd.DataFrame:
+    codes = ts_codes or ["000300.SH", "000905.SH"]
+    return pd.DataFrame({
+        "ts_code": codes,
+        "trade_date": [trade_date] * len(codes),
+        "open": [3500.0] * len(codes),
+        "high": [3550.0] * len(codes),
+        "low": [3480.0] * len(codes),
+        "close": [3520.0] * len(codes),
+        "pre_close": [3490.0] * len(codes),
+        "change": [30.0] * len(codes),
+        "pct_chg": [0.86] * len(codes),
+        "vol": [50000000.0] * len(codes),
+        "amount": [1750000000.0] * len(codes),
+    })
+
+
+def test_index_daily_returns_all_on_no_filter(tmp_path):
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 2), _index_daily_partition(date(2024, 1, 2)))
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 3), _index_daily_partition(date(2024, 1, 3)))
+
+    pro = LocalPro(tmp_path)
+    result = pro.index_daily()
+
+    assert len(result) == 4  # 2 dates × 2 codes
+
+
+def test_index_daily_filters_by_ts_code(tmp_path):
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 2), _index_daily_partition(date(2024, 1, 2)))
+
+    pro = LocalPro(tmp_path)
+    result = pro.index_daily(ts_code="000300.SH")
+
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "000300.SH"
+
+
+def test_index_daily_filters_by_trade_date(tmp_path):
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 2), _index_daily_partition(date(2024, 1, 2)))
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 3), _index_daily_partition(date(2024, 1, 3)))
+
+    pro = LocalPro(tmp_path)
+    result = pro.index_daily(trade_date="20240102")
+
+    assert len(result) == 2
+    assert all(result["trade_date"] == "20240102")
+
+
+def test_index_daily_filters_by_date_range(tmp_path):
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 2), _index_daily_partition(date(2024, 1, 2)))
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 3), _index_daily_partition(date(2024, 1, 3)))
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 4), _index_daily_partition(date(2024, 1, 4)))
+
+    pro = LocalPro(tmp_path)
+    result = pro.index_daily(start_date="20240102", end_date="20240103")
+
+    assert len(result) == 4  # 2 dates × 2 codes
+    dates = sorted(result["trade_date"].unique())
+    assert dates == ["20240102", "20240103"]
+
+
+def test_index_daily_raises_when_data_missing(tmp_path):
+    pro = LocalPro(tmp_path)
+
+    with pytest.raises(FileNotFoundError, match="index_daily"):
+        pro.index_daily(ts_code="000300.SH")
+
+
+def test_index_daily_fields_filter(tmp_path):
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 2), _index_daily_partition(date(2024, 1, 2)))
+
+    pro = LocalPro(tmp_path)
+    result = pro.index_daily(ts_code="000300.SH", fields="ts_code,trade_date,close")
+
+    assert list(result.columns) == ["ts_code", "trade_date", "close"]
+
+
+def test_index_daily_in_query_dispatch(tmp_path):
+    write_daily_partition(tmp_path, "index_daily", date(2024, 1, 2), _index_daily_partition(date(2024, 1, 2)))
+
+    pro = LocalPro(tmp_path)
+    result = pro.query("index_daily", ts_code="000300.SH")
+
+    assert len(result) == 1

@@ -11,6 +11,7 @@ from zer0share.fetcher import (
     CI_MEMBER_COLS,
     DAILY_BASIC_COLS,
     DAILY_COLS,
+    INDEX_DAILY_COLS,
     INDEX_WEIGHT_COLS,
     STOCK_ST_COLS,
     STK_LIMIT_COLS,
@@ -218,6 +219,25 @@ class LocalPro:
             table_name="stk_limit",
             sync_table="stk_limit",
             columns=STK_LIMIT_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+        )
+
+    def index_daily(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        return self._query_daily_partitioned(
+            table_name="index_daily",
+            sync_table="index_daily",
+            columns=INDEX_DAILY_COLS,
             ts_code=ts_code,
             trade_date=trade_date,
             start_date=start_date,
@@ -495,6 +515,7 @@ class LocalPro:
             "stock_st": self.stock_st,
             "suspend_d": self.suspend_d,
             "stk_limit": self.stk_limit,
+            "index_daily": self.index_daily,
             "index_weight": self.index_weight,
             "universe": self.universe,
             "pro_bar": self.pro_bar,

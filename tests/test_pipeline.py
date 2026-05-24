@@ -6,6 +6,8 @@ import pytest
 
 from zer0share.pipeline import Pipeline, EXCHANGES
 from zer0share.storage import read_sw_classify, read_sw_member, read_ci_member, write_basic, write_trade_cal
+from zer0share.fetcher import INDEX_DAILY_CODES
+from zer0share.storage import daily_partition_exists
 
 
 def _basic_df() -> pd.DataFrame:
@@ -632,3 +634,97 @@ def test_sync_ci_member_failure_sends_alert_and_raises(pipeline):
     pipeline._notifier.send.assert_called_once()
     msg = pipeline._notifier.send.call_args[0][0]
     assert "ci_member 同步失败" in msg
+
+
+def _index_daily_df(ts_code: str = "000300.SH", trade_date: date = date(2024, 1, 2)) -> pd.DataFrame:
+    return pd.DataFrame({
+        "ts_code": [ts_code],
+        "trade_date": [trade_date],
+        "open": [3500.0],
+        "high": [3550.0],
+        "low": [3480.0],
+        "close": [3520.0],
+        "pre_close": [3490.0],
+        "change": [30.0],
+        "pct_chg": [0.86],
+        "vol": [50000000.0],
+        "amount": [1750000000.0],
+    })
+
+
+def test_sync_index_daily_fetches_all_codes(pipeline, cfg):
+    pipeline._fetcher.fetch_index_daily.return_value = pd.DataFrame()
+
+    with patch("zer0share.pipeline.date") as mock_date:
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_index_daily()
+
+    assert pipeline._fetcher.fetch_index_daily.call_count == len(INDEX_DAILY_CODES)
+    for ts_code in INDEX_DAILY_CODES:
+        pipeline._fetcher.fetch_index_daily.assert_any_call(
+            ts_code,
+            date(2016, 1, 1),
+            date(2024, 1, 2),
+        )
+
+
+def test_sync_index_daily_writes_date_partitions(pipeline, cfg):
+    pipeline._fetcher.fetch_index_daily.side_effect = [
+        _index_daily_df(ts_code=ts_code, trade_date=date(2024, 1, 2))
+        for ts_code in INDEX_DAILY_CODES
+    ]
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_index_daily()
+
+    assert daily_partition_exists(cfg.data_dir, "index_daily", date(2024, 1, 2))
+
+
+def test_sync_index_daily_skips_existing_partitions(pipeline, cfg):
+    from zer0share.storage import write_daily_partition
+    existing = _index_daily_df(ts_code="000300.SH", trade_date=date(2024, 1, 2))
+    write_daily_partition(cfg.data_dir, "index_daily", date(2024, 1, 2), existing)
+
+    pipeline._fetcher.fetch_index_daily.side_effect = [
+        _index_daily_df(ts_code=ts_code, trade_date=date(2024, 1, 2))
+        for ts_code in INDEX_DAILY_CODES
+    ]
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_index_daily()
+
+    # Partition already existed — same file should still be there (written once, not twice)
+    assert daily_partition_exists(cfg.data_dir, "index_daily", date(2024, 1, 2))
+
+
+def test_sync_index_daily_up_to_date_skips_fetch(pipeline, cfg):
+    pipeline._meta.update_last_date("index_daily", date(2024, 1, 2))
+
+    with patch("zer0share.pipeline.date") as mock_date:
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_index_daily()
+
+    pipeline._fetcher.fetch_index_daily.assert_not_called()
+
+
+def test_sync_index_daily_updates_metastore(pipeline, cfg):
+    pipeline._fetcher.fetch_index_daily.side_effect = [
+        _index_daily_df(ts_code=ts_code, trade_date=date(2024, 1, 2))
+        for ts_code in INDEX_DAILY_CODES
+    ]
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_index_daily()
+
+    assert pipeline._meta.get_last_date("index_daily") == date(2024, 1, 2)

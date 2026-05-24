@@ -5,7 +5,7 @@ import pandas as pd
 from loguru import logger
 
 from zer0share.config import Config
-from zer0share.fetcher import TushareFetcher
+from zer0share.fetcher import TushareFetcher, INDEX_DAILY_CODES
 from zer0share.notifier import Notifier
 from zer0share.storage import (
     MetaStore,
@@ -449,6 +449,70 @@ class Pipeline:
             f"index_weight 同步完成: 成功 {success} 个分区, "
             f"空窗口 {empty_months} 个, 跳过已存在 {skipped_existing} 个分区, "
             f"请求 {requests} 次"
+        )
+        logger.info(msg)
+        self._notifier.send(msg)
+
+    def sync_index_daily(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        today = date.today()
+        last = self._meta.get_last_date("index_daily")
+
+        if start_date is None:
+            start = (last + timedelta(days=1)) if last else FIRST_DATE
+            end = today
+        else:
+            start = start_date
+            end = end_date or today
+
+        if start_date is None and start > end:
+            logger.info("index_daily 已是最新，无需同步")
+            return
+        if start > end:
+            raise ValueError("start_date must be on or before end_date")
+
+        logger.info(
+            f"index_daily 同步开始: {start} ~ {end}, 共 {len(INDEX_DAILY_CODES)} 个指数"
+        )
+        all_frames = []
+        for ts_code in INDEX_DAILY_CODES:
+            try:
+                df = self._fetcher.fetch_index_daily(ts_code, start, end)
+                time.sleep(0.2)
+                if not df.empty:
+                    all_frames.append(df)
+            except Exception as e:
+                logger.error(f"index_daily {ts_code} 拉取失败: {e}")
+                self._notifier.send(f"index_daily {ts_code} 拉取失败: {e}")
+                raise
+
+        if not all_frames:
+            logger.info("index_daily 无数据，跳过")
+            return
+
+        combined = pd.concat(all_frames, ignore_index=True)
+        success = 0
+        skipped_existing = 0
+        frontier = last
+
+        for trade_date, part in combined.groupby("trade_date"):
+            if daily_partition_exists(self._cfg.data_dir, "index_daily", trade_date):
+                skipped_existing += 1
+                continue
+            write_daily_partition(
+                self._cfg.data_dir, "index_daily", trade_date, part.reset_index(drop=True)
+            )
+            if frontier is None or trade_date > frontier:
+                self._meta.update_last_date("index_daily", trade_date)
+                frontier = trade_date
+            success += 1
+
+        msg = (
+            f"index_daily 同步完成: 成功 {success} 天, "
+            f"跳过已存在 {skipped_existing} 天, 共 {len(INDEX_DAILY_CODES)} 个指数"
         )
         logger.info(msg)
         self._notifier.send(msg)

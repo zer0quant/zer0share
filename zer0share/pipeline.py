@@ -487,10 +487,12 @@ class Pipeline:
             except Exception as e:
                 logger.error(f"index_daily {ts_code} 拉取失败: {e}")
                 self._notifier.send(f"index_daily {ts_code} 拉取失败: {e}")
-                raise
+                continue
 
         if not all_frames:
-            logger.info("index_daily 无数据，跳过")
+            msg = "index_daily 无数据，跳过"
+            logger.info(msg)
+            self._notifier.send(msg)
             return
 
         combined = pd.concat(all_frames, ignore_index=True)

@@ -715,6 +715,18 @@ def test_sync_index_daily_up_to_date_skips_fetch(pipeline, cfg):
     pipeline._fetcher.fetch_index_daily.assert_not_called()
 
 
+def test_sync_index_daily_no_data_sends_notification(pipeline, cfg):
+    pipeline._fetcher.fetch_index_daily.return_value = pd.DataFrame()
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_index_daily()
+
+    pipeline._notifier.send.assert_called_once_with("index_daily 无数据，跳过")
+
+
 def test_sync_index_daily_updates_metastore(pipeline, cfg):
     pipeline._fetcher.fetch_index_daily.side_effect = [
         _index_daily_df(ts_code=ts_code, trade_date=date(2024, 1, 2))

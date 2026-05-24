@@ -42,6 +42,11 @@ CI_MEMBER_COLS = [
     "in_date", "out_date", "is_new",
 ]
 
+INDEX_DAILY_COLS = [
+    "ts_code", "trade_date", "open", "high", "low",
+    "close", "pre_close", "change", "pct_chg", "vol", "amount",
+]
+
 
 def _basic_row(
     *,
@@ -67,6 +72,22 @@ def _basic_row(
         "is_hs": "S",
         "act_name": "深圳市投资控股有限公司",
         "act_ent_type": "地方国企",
+    }
+
+
+def _index_daily_row(ts_code: str = "000300.SH", trade_date: str = "20240102") -> dict:
+    return {
+        "ts_code": ts_code,
+        "trade_date": trade_date,
+        "open": 3500.0,
+        "high": 3550.0,
+        "low": 3480.0,
+        "close": 3520.0,
+        "pre_close": 3490.0,
+        "change": 30.0,
+        "pct_chg": 0.86,
+        "vol": 50000000.0,
+        "amount": 1750000000.0,
     }
 
 
@@ -473,3 +494,55 @@ def test_fetch_ci_member_converts_dates(mock_pro):
     assert len(df) == 1
     assert df.iloc[0]["in_date"] == date(2020, 1, 1)
     assert df.iloc[0]["out_date"] == date(2023, 12, 31)
+
+
+def test_fetch_index_daily_returns_correct_columns(mock_pro):
+    mock_pro.index_daily.return_value = pd.DataFrame([_index_daily_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_index_daily("000300.SH", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert list(df.columns) == INDEX_DAILY_COLS
+    assert len(df) == 1
+
+
+def test_fetch_index_daily_calls_api_with_correct_params(mock_pro):
+    mock_pro.index_daily.return_value = pd.DataFrame([_index_daily_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    fetcher.fetch_index_daily("000300.SH", date(2024, 1, 1), date(2024, 1, 31))
+
+    mock_pro.index_daily.assert_called_once_with(
+        ts_code="000300.SH",
+        start_date="20240101",
+        end_date="20240131",
+        fields=",".join(INDEX_DAILY_COLS),
+    )
+
+
+def test_fetch_index_daily_converts_trade_date(mock_pro):
+    mock_pro.index_daily.return_value = pd.DataFrame([_index_daily_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_index_daily("000300.SH", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert df.iloc[0]["trade_date"] == date(2024, 1, 2)
+
+
+def test_fetch_index_daily_returns_empty_when_none(mock_pro):
+    mock_pro.index_daily.return_value = None
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_index_daily("000300.SH", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert df.empty
+    assert list(df.columns) == INDEX_DAILY_COLS
+
+
+def test_fetch_index_daily_returns_empty_when_empty_df(mock_pro):
+    mock_pro.index_daily.return_value = pd.DataFrame()
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_index_daily("000300.SH", date(2024, 1, 1), date(2024, 1, 31))
+
+    assert df.empty

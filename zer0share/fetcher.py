@@ -69,6 +69,25 @@ CI_MEMBER_COLS = [
     "in_date", "out_date", "is_new",
 ]
 
+INDEX_DAILY_CODES = [
+    "000001.SH",  # 上证指数
+    "399001.SZ",  # 深证成指
+    "000016.SH",  # 上证50
+    "000300.SH",  # 沪深300
+    "000905.SH",  # 中证500
+    "000852.SH",  # 中证1000
+    "000985.SH",  # 中证全指
+    "399006.SZ",  # 创业板指
+    "000688.SH",  # 科创50
+    "399005.SZ",  # 中小板指
+    "000922.SH",  # 中证红利
+    "932000.CSI", # 中证2000（代码待实测确认）
+]
+INDEX_DAILY_COLS = [
+    "ts_code", "trade_date", "open", "high", "low",
+    "close", "pre_close", "change", "pct_chg", "vol", "amount",
+]
+
 
 class TushareFetcher:
     def __init__(self, token: str):
@@ -157,6 +176,21 @@ class TushareFetcher:
             fields=",".join(INDEX_WEIGHT_COLS),
         )
         return _format_trade_date(df, INDEX_WEIGHT_COLS)
+
+    def fetch_index_daily(
+        self, ts_code: str, start_date: date, end_date: date
+    ) -> pd.DataFrame:
+        logger.debug(
+            f"拉取指数日线: {ts_code} "
+            f"{start_date.strftime('%Y%m%d')}~{end_date.strftime('%Y%m%d')}"
+        )
+        df = self._pro.index_daily(
+            ts_code=ts_code,
+            start_date=start_date.strftime("%Y%m%d"),
+            end_date=end_date.strftime("%Y%m%d"),
+            fields=",".join(INDEX_DAILY_COLS),
+        )
+        return _format_trade_date(df, INDEX_DAILY_COLS)
 
     def fetch_trade_cal(
         self,

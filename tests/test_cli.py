@@ -154,3 +154,43 @@ def test_sync_industry_rejects_date_range():
 
     assert result.exit_code != 0
     assert "date range options" in result.output
+
+
+def test_sync_index_daily_accepts_date_range():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(
+            cli,
+            [
+                "sync",
+                "--table",
+                "index_daily",
+                "--start-date",
+                "2024-01-01",
+                "--end-date",
+                "2024-01-31",
+            ],
+        )
+
+    assert result.exit_code == 0
+    pipeline.sync_index_daily.assert_called_once_with(
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 1, 31),
+    )
+
+
+def test_sync_all_includes_index_daily():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(cli, ["sync", "--all"])
+
+    assert result.exit_code == 0
+    pipeline.sync_index_daily.assert_called_once()

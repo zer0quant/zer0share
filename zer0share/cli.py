@@ -36,6 +36,7 @@ SYNC_TABLES = [
     "suspend_d",
     "stk_limit",
     "index_weight",
+    "index_daily",
     "industry",
     "ci_member",
 ]
@@ -67,6 +68,7 @@ def sync(
         "suspend_d",
         "stk_limit",
         "index_weight",
+        "index_daily",
     }
     if (start_date is not None or end_date is not None) and table not in range_tables:
         raise click.UsageError("date range options are only supported for daily partitioned tables")
@@ -117,6 +119,11 @@ def sync(
             )
         if sync_all or table == "index_weight":
             pipeline.sync_index_weight(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "index_daily":
+            pipeline.sync_index_daily(
                 start_date=parsed_start_date,
                 end_date=parsed_end_date,
             )

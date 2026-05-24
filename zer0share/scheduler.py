@@ -29,6 +29,14 @@ def start_scheduler(config_path: str = "config/settings.toml") -> None:
             id="daily_kline",
         )
         scheduler.add_job(
+            pipeline.sync_index_daily,
+            CronTrigger(
+                hour=cfg.scheduler_daily_kline_hour,
+                minute=cfg.scheduler_daily_kline_minute,
+            ),
+            id="index_daily",
+        )
+        scheduler.add_job(
             pipeline.sync_basic,
             CronTrigger(hour=cfg.scheduler_basic_hour),
             id="basic",
@@ -42,7 +50,7 @@ def start_scheduler(config_path: str = "config/settings.toml") -> None:
             id="adj_factor",
         )
         logger.info(
-            f"调度器启动: daily_kline 每天 "
+            f"调度器启动: daily_kline + index_daily 每天 "
             f"{cfg.scheduler_daily_kline_hour}:{cfg.scheduler_daily_kline_minute:02d}, "
             f"adj_factor 每天 "
             f"{cfg.scheduler_adj_factor_hour}:{cfg.scheduler_adj_factor_minute:02d}, "

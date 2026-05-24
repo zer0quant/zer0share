@@ -67,6 +67,7 @@ uv run python main.py sync --table stock_st     # 每日 ST 股票列表
 uv run python main.py sync --table suspend_d    # 每日停牌列表
 uv run python main.py sync --table stk_limit    # 每日涨跌停价格
 uv run python main.py sync --table index_weight # 沪深300/中证500/中证1000成分
+uv run python main.py sync --table index_daily  # 宽基指数日线行情
 uv run python main.py sync --table industry    # 申万行业分类 + 成分映射
 uv run python main.py sync --table ci_member   # 中信行业成分映射
 ```
@@ -153,6 +154,9 @@ suspend = pro.suspend_d(trade_date="20240131")
 limit = pro.stk_limit(trade_date="20240131")
 hs300 = pro.index_weight(index_code="399300.SZ", start_date="20240101", end_date="20240131")
 
+# 指数日线行情（用于对冲基准收益率）
+idx_daily = pro.index_daily(ts_code="000300.SH", start_date="20240101", end_date="20240131")
+
 # 行业数据（用于行业中性化）
 sw_industries = pro.index_classify(level="L1", src="SW2021")       # 申万一级行业列表
 sw_member = pro.index_member_all(ts_code="000001.SZ", is_new="Y")  # 查股票所属申万行业
@@ -179,6 +183,7 @@ qfq = pro.pro_bar(
 | `suspend_d` | 查询已同步的每日停复牌信息 |
 | `stk_limit` | 查询已同步的每日涨跌停价格 |
 | `index_weight` | 查询已同步的指数成分和权重 |
+| `index_daily` | 查询已同步的宽基指数日线行情（12个指数） |
 | `index_classify` | 查询申万行业分类树（L1/L2/L3） |
 | `index_member_all` | 查询申万股票-行业映射（支持历史变更） |
 | `ci_index_member` | 查询中信股票-行业映射（支持历史变更） |
@@ -220,6 +225,10 @@ data/
 │   ├── index_code=399300.SZ/date=20160104/data.parquet
 │   ├── index_code=000905.SH/date=20160104/data.parquet
 │   └── index_code=000852.SH/date=20160104/data.parquet
+├── index_daily/
+│   ├── date=20160104/data.parquet   # 含当日全部12个宽基指数
+│   ├── date=20160105/data.parquet
+│   └── ...
 ├── industry/
 │   ├── sw_classify/data.parquet       # 申万行业分类树
 │   ├── sw_member/data.parquet         # 申万股票-行业映射（全量历史）
@@ -247,6 +256,7 @@ db/
 | `sync --table suspend_d` | 增量同步每日停复牌信息 |
 | `sync --table stk_limit` | 增量同步每日涨跌停价格 |
 | `sync --table index_weight` | 增量同步指数成分和权重 |
+| `sync --table index_daily` | 增量同步12个宽基指数日线行情 |
 | `sync --table industry` | 同步申万行业分类 + 成分映射（全量覆盖） |
 | `sync --table ci_member` | 同步中信行业成分映射（全量覆盖） |
 | `sync --all` | 按顺序同步全部 |

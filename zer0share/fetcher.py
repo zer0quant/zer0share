@@ -126,6 +126,31 @@ FUT_MAPPING_COLS = [
     "ts_code", "trade_date", "mapping_ts_code",
 ]
 
+FT_LIMIT_COLS = [
+    "trade_date", "ts_code", "name", "up_limit", "down_limit",
+    "m_ratio", "cont", "exchange",
+]
+
+FUT_WEEKLY_COLS = [
+    "ts_code", "trade_date", "freq", "open", "high", "low",
+    "close", "pre_close", "settle", "pre_settle", "vol",
+    "amount", "oi", "oi_chg", "exchange", "change1", "change2",
+]
+
+FUT_MONTHLY_COLS = FUT_WEEKLY_COLS
+
+FUT_INDEX_DAILY_COLS = [
+    "ts_code", "trade_date", "close", "open", "high", "low",
+    "pre_close", "change", "pct_chg", "vol", "amount",
+]
+
+FUT_WEEKLY_DETAIL_COLS = [
+    "exchange", "prd", "name", "vol", "vol_yoy", "amount",
+    "amout_yoy", "cumvol", "cumvol_yoy", "cumamt", "cumamt_yoy",
+    "open_interest", "interest_wow", "mc_close", "close_wow",
+    "week", "week_date",
+]
+
 
 class TushareFetcher:
     def __init__(self, token: str):
@@ -304,6 +329,49 @@ class TushareFetcher:
         logger.debug(f"拉取期货主力映射: {date_str}")
         df = self._pro.fut_mapping(trade_date=date_str, fields=",".join(FUT_MAPPING_COLS))
         return _format_trade_date(df, FUT_MAPPING_COLS)
+
+    def fetch_ft_limit(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期货涨跌停: {date_str}")
+        df = self._pro.ft_limit(trade_date=date_str, fields=",".join(FT_LIMIT_COLS))
+        return _format_trade_date(df, FT_LIMIT_COLS)
+
+    def fetch_fut_weekly(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期货周线: {date_str}")
+        df = self._pro.fut_weekly_monthly(
+            trade_date=date_str, freq="week", fields=",".join(FUT_WEEKLY_COLS),
+        )
+        return _format_trade_date(df, FUT_WEEKLY_COLS)
+
+    def fetch_fut_monthly(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期货月线: {date_str}")
+        df = self._pro.fut_weekly_monthly(
+            trade_date=date_str, freq="month", fields=",".join(FUT_MONTHLY_COLS),
+        )
+        return _format_trade_date(df, FUT_MONTHLY_COLS)
+
+    def fetch_fut_index_daily(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取南华期货指数: {date_str}")
+        df = self._pro.fut_index_daily(
+            trade_date=date_str, fields=",".join(FUT_INDEX_DAILY_COLS),
+        )
+        return _format_trade_date(df, FUT_INDEX_DAILY_COLS)
+
+    def fetch_fut_weekly_detail(self, week: str) -> pd.DataFrame:
+        logger.debug(f"拉取期货品种周报: {week}")
+        df = self._pro.fut_weekly_detail(
+            week=week, fields=",".join(FUT_WEEKLY_DETAIL_COLS),
+        )
+        if df is None or df.empty:
+            return pd.DataFrame(columns=FUT_WEEKLY_DETAIL_COLS)
+        if "week_date" in df.columns:
+            df["week_date"] = pd.to_datetime(
+                df["week_date"], format="%Y%m%d", errors="coerce"
+            ).apply(lambda x: x.date() if not pd.isna(x) and not pd.isnull(x) else None)
+        return df[FUT_WEEKLY_DETAIL_COLS]
 
     SW_VERSIONS = ("SW2014", "SW2021")
 

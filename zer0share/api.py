@@ -19,6 +19,12 @@ from zer0share.fetcher import (
     SW_CLASSIFY_COLS,
     SW_MEMBER_COLS,
     TRADE_CAL_COLS,
+    FUT_BASIC_COLS,
+    FUT_DAILY_COLS,
+    FUT_HOLDING_COLS,
+    FUT_WSR_COLS,
+    FUT_SETTLE_COLS,
+    FUT_MAPPING_COLS,
 )
 
 
@@ -442,6 +448,169 @@ class LocalPro:
         df = duckdb.connect().execute(sql, [str(path), *params]).fetchdf()
         return _format_date_columns(df, ["in_date", "out_date"])
 
+    def fut_basic(
+        self,
+        ts_code: str | None = None,
+        exchange: str | None = None,
+        fut_type: str | None = None,
+        fut_code: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        table_dir = self._data_dir / "futures" / "fut_basic"
+        if not table_dir.exists():
+            raise FileNotFoundError(
+                "fut_basic data not found; run `python main.py sync --table fut_basic` first"
+            )
+
+        selected = _parse_fields(fields, FUT_BASIC_COLS)
+        where = []
+        params = []
+        if ts_code is not None:
+            codes = [code.strip() for code in ts_code.split(",") if code.strip()]
+            placeholders = ", ".join("?" for _ in codes)
+            where.append(f"ts_code IN ({placeholders})")
+            params.extend(codes)
+        if exchange is not None:
+            where.append("exchange = ?")
+            params.append(exchange)
+        if fut_code is not None:
+            where.append("fut_code = ?")
+            params.append(fut_code)
+
+        pattern = table_dir / "date=*" / "data.parquet"
+        sql = (
+            f"SELECT {', '.join(selected)} "
+            "FROM read_parquet(?, hive_partitioning=true, union_by_name=true)"
+        )
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY ts_code"
+
+        df = duckdb.connect().execute(sql, [str(pattern), *params]).fetchdf()
+        return _format_date_columns(df, ["list_date", "delist_date", "last_ddate"])
+
+    def fut_daily(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        return self._query_daily_partitioned(
+            table_name="fut_daily",
+            sync_table="fut_daily",
+            columns=FUT_DAILY_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            data_dir_override=self._data_dir / "futures",
+        )
+
+    def fut_holding(
+        self,
+        trade_date: str | None = None,
+        symbol: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        exchange: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        extra = {}
+        if symbol is not None:
+            extra["symbol"] = symbol
+        if exchange is not None:
+            extra["exchange"] = exchange
+        return self._query_daily_partitioned(
+            table_name="fut_holding",
+            sync_table="fut_holding",
+            columns=FUT_HOLDING_COLS,
+            ts_code=None,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            extra_filters=extra or None,
+            data_dir_override=self._data_dir / "futures",
+            order_by="trade_date, symbol, broker",
+        )
+
+    def fut_wsr(
+        self,
+        trade_date: str | None = None,
+        symbol: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        exchange: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        extra = {}
+        if symbol is not None:
+            extra["symbol"] = symbol
+        if exchange is not None:
+            extra["exchange"] = exchange
+        return self._query_daily_partitioned(
+            table_name="fut_wsr",
+            sync_table="fut_wsr",
+            columns=FUT_WSR_COLS,
+            ts_code=None,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            extra_filters=extra or None,
+            data_dir_override=self._data_dir / "futures",
+            order_by="trade_date, symbol, warehouse",
+        )
+
+    def fut_settle(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        exchange: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        extra = {}
+        if exchange is not None:
+            extra["exchange"] = exchange
+        return self._query_daily_partitioned(
+            table_name="fut_settle",
+            sync_table="fut_settle",
+            columns=FUT_SETTLE_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            extra_filters=extra or None,
+            data_dir_override=self._data_dir / "futures",
+        )
+
+    def fut_mapping(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        return self._query_daily_partitioned(
+            table_name="fut_mapping",
+            sync_table="fut_mapping",
+            columns=FUT_MAPPING_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            data_dir_override=self._data_dir / "futures",
+            order_by="ts_code, trade_date",
+        )
+
     def pro_bar(
         self,
         ts_code: str,
@@ -522,6 +691,12 @@ class LocalPro:
             "index_classify": self.index_classify,
             "index_member_all": self.index_member_all,
             "ci_index_member": self.ci_index_member,
+            "fut_basic": self.fut_basic,
+            "fut_daily": self.fut_daily,
+            "fut_holding": self.fut_holding,
+            "fut_wsr": self.fut_wsr,
+            "fut_settle": self.fut_settle,
+            "fut_mapping": self.fut_mapping,
         }
         try:
             method = dispatch[api_name]
@@ -540,6 +715,8 @@ class LocalPro:
         end_date: str | None,
         fields: str | list[str] | None,
         extra_filters: dict[str, str] | None = None,
+        data_dir_override: Path | None = None,
+        order_by: str = "ts_code, trade_date",
     ) -> pd.DataFrame:
         if trade_date is not None and (start_date is not None or end_date is not None):
             raise ValueError("trade_date cannot be combined with start_date or end_date")
@@ -548,7 +725,8 @@ class LocalPro:
         if parsed_start is not None and parsed_end is not None and parsed_end < parsed_start:
             raise ValueError("end_date must be on or after start_date")
 
-        table_dir = self._data_dir / table_name
+        base_dir = data_dir_override or self._data_dir
+        table_dir = base_dir / table_name
         if not table_dir.exists():
             raise FileNotFoundError(
                 f"{sync_table} data not found; run `python main.py sync --table {sync_table}` first"
@@ -583,7 +761,7 @@ class LocalPro:
         )
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY ts_code, trade_date"
+        sql += f" ORDER BY {order_by}"
 
         df = duckdb.connect().execute(sql, [str(pattern), *params]).fetchdf()
         return _format_date_columns(df, ["trade_date"])

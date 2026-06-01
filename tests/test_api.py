@@ -992,3 +992,168 @@ def test_index_daily_in_query_dispatch(tmp_path):
     result = pro.query("index_daily", ts_code="000300.SH")
 
     assert len(result) == 1
+
+
+# --- Futures API tests ---
+
+from zer0share.storage import write_daily_partition
+from zer0share.fetcher import (
+    FUT_BASIC_COLS, FUT_DAILY_COLS, FUT_HOLDING_COLS,
+    FUT_WSR_COLS, FUT_SETTLE_COLS, FUT_MAPPING_COLS,
+)
+
+
+def _write_fut_daily_data(data_dir, trade_date, ts_codes=None):
+    ts_codes = ts_codes or ["CU2401.SHF", "AG2401.SHF"]
+    rows = []
+    for ts_code in ts_codes:
+        rows.append({
+            "ts_code": ts_code,
+            "trade_date": trade_date,
+            "pre_close": 50000.0,
+            "pre_settle": 50100.0,
+            "open": 50200.0,
+            "high": 50500.0,
+            "low": 49900.0,
+            "close": 50300.0,
+            "settle": 50250.0,
+            "change1": 200.0,
+            "change2": 150.0,
+            "vol": 10000.0,
+            "amount": 251250.0,
+            "oi": 50000.0,
+            "oi_chg": 500.0,
+            "delv_settle": None,
+        })
+    df = pd.DataFrame(rows)
+    futures_dir = data_dir / "futures"
+    write_daily_partition(futures_dir, "fut_daily", trade_date, df)
+    return df
+
+
+@pytest.fixture
+def futures_api(tmp_path):
+    return LocalPro(tmp_path)
+
+
+def test_fut_basic_query_returns_data(tmp_path, futures_api):
+    from datetime import date as dt
+    df = pd.DataFrame({
+        "ts_code": ["CU2401.SHF", "AG2401.SHF"],
+        "symbol": ["CU2401", "AG2401"],
+        "exchange": ["SHFE", "SHFE"],
+        "name": ["沪铜2401", "沪银2401"],
+        "fut_code": ["CU", "AG"],
+        "multiplier": [None, None],
+        "trade_unit": ["5吨/手", "15千克/手"],
+        "per_unit": [5.0, 15.0],
+        "quote_unit": ["元/吨", "元/千克"],
+        "quote_unit_desc": ["10元/吨", "1元/千克"],
+        "d_mode_desc": ["实物交割", "实物交割"],
+        "list_date": ["20240101", "20240101"],
+        "delist_date": ["20240115", "20240115"],
+        "d_month": ["202401", "202401"],
+        "last_ddate": ["20240115", "20240115"],
+        "trade_time_desc": [None, None],
+    })
+    write_daily_partition(tmp_path / "futures", "fut_basic", dt(2024, 1, 2), df)
+
+    result = futures_api.fut_basic()
+    assert len(result) == 2
+    assert set(result["ts_code"]) == {"CU2401.SHF", "AG2401.SHF"}
+
+
+def test_fut_basic_query_filters_by_exchange(tmp_path, futures_api):
+    from datetime import date as dt
+    df = pd.DataFrame({
+        "ts_code": ["CU2401.SHF", "A2505.DCE"],
+        "symbol": ["CU2401", "A2505"],
+        "exchange": ["SHFE", "DCE"],
+        "name": ["沪铜2401", "豆一2505"],
+        "fut_code": ["CU", "A"],
+        "multiplier": [None, None],
+        "trade_unit": ["5吨/手", "10吨/手"],
+        "per_unit": [5.0, 10.0],
+        "quote_unit": ["元/吨", "元/吨"],
+        "quote_unit_desc": ["10元/吨", "1元/吨"],
+        "d_mode_desc": ["实物交割", "实物交割"],
+        "list_date": ["20240101", "20240101"],
+        "delist_date": ["20240115", "20240515"],
+        "d_month": ["202401", "202405"],
+        "last_ddate": ["20240115", "20240515"],
+        "trade_time_desc": [None, None],
+    })
+    write_daily_partition(tmp_path / "futures", "fut_basic", dt(2024, 1, 2), df)
+
+    result = futures_api.fut_basic(exchange="DCE")
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "A2505.DCE"
+
+
+def test_fut_daily_query_returns_data(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    _write_fut_daily_data(tmp_path, dt(2024, 1, 2))
+
+    result = api.fut_daily(trade_date="20240102")
+    assert len(result) == 2
+
+
+def test_fut_daily_query_filters_by_ts_code(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    _write_fut_daily_data(tmp_path, dt(2024, 1, 2))
+
+    result = api.fut_daily(ts_code="CU2401.SHF", trade_date="20240102")
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "CU2401.SHF"
+
+
+def test_fut_daily_query_raises_when_no_data(tmp_path):
+    api = LocalPro(tmp_path)
+    with pytest.raises(FileNotFoundError):
+        api.fut_daily(trade_date="20240102")
+
+
+def test_fut_holding_query_returns_data(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    df = pd.DataFrame({
+        "trade_date": [dt(2024, 1, 2), dt(2024, 1, 2)],
+        "symbol": ["CU", "CU"],
+        "broker": ["中信期货", "国泰君安"],
+        "vol": [10000, 8000],
+        "vol_chg": [500, -200],
+        "long_hld": [15000, 12000],
+        "long_chg": [200, -100],
+        "short_hld": [12000, 10000],
+        "short_chg": [-100, 300],
+        "exchange": ["SHFE", "SHFE"],
+    })
+    write_daily_partition(tmp_path / "futures", "fut_holding", dt(2024, 1, 2), df)
+
+    result = api.fut_holding(trade_date="20240102")
+    assert len(result) == 2
+
+
+def test_fut_mapping_query_returns_data(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    df = pd.DataFrame({
+        "ts_code": ["CU.SHF", "AG.SHF"],
+        "trade_date": [dt(2024, 1, 2), dt(2024, 1, 2)],
+        "mapping_ts_code": ["CU2401.SHF", "AG2401.SHF"],
+    })
+    write_daily_partition(tmp_path / "futures", "fut_mapping", dt(2024, 1, 2), df)
+
+    result = api.fut_mapping(trade_date="20240102")
+    assert len(result) == 2
+
+
+def test_query_dispatch_supports_futures(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    _write_fut_daily_data(tmp_path, dt(2024, 1, 2))
+
+    result = api.query("fut_daily", trade_date="20240102")
+    assert len(result) == 2

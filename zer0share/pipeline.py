@@ -1,11 +1,12 @@
 from datetime import date, timedelta
+from pathlib import Path
 import time
 
 import pandas as pd
 from loguru import logger
 
 from zer0share.config import Config
-from zer0share.fetcher import TushareFetcher, INDEX_DAILY_CODES
+from zer0share.fetcher import TushareFetcher, INDEX_DAILY_CODES, FUTURES_EXCHANGES
 from zer0share.notifier import Notifier
 from zer0share.storage import (
     MetaStore,
@@ -548,6 +549,94 @@ class Pipeline:
             self._notifier.send(f"ci_member 同步失败: {e}")
             raise
 
+    def sync_fut_basic(self) -> None:
+        today = date.today()
+        futures_dir = self._cfg.data_dir / "futures"
+        all_frames = []
+        try:
+            for exchange in FUTURES_EXCHANGES:
+                for fut_type in ("1", "2"):
+                    df = self._fetcher.fetch_fut_basic(exchange, fut_type)
+                    time.sleep(0.2)
+                    if not df.empty:
+                        all_frames.append(df)
+            if all_frames:
+                combined = pd.concat(all_frames, ignore_index=True)
+            else:
+                combined = pd.DataFrame()
+            write_daily_partition(futures_dir, "fut_basic", today, combined)
+            self._meta.update_last_date("fut_basic", today)
+            logger.info(f"fut_basic 同步完成: {len(combined)} 条")
+        except Exception as e:
+            logger.error(f"fut_basic 同步失败: {e}")
+            self._notifier.send(f"fut_basic 同步失败: {e}")
+            raise
+
+    def sync_fut_daily(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="fut_daily",
+            fetch=self._fetcher.fetch_fut_daily,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "futures",
+        )
+
+    def sync_fut_holding(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="fut_holding",
+            fetch=self._fetcher.fetch_fut_holding,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "futures",
+        )
+
+    def sync_fut_wsr(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="fut_wsr",
+            fetch=self._fetcher.fetch_fut_wsr,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "futures",
+        )
+
+    def sync_fut_settle(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="fut_settle",
+            fetch=self._fetcher.fetch_fut_settle,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "futures",
+        )
+
+    def sync_fut_mapping(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="fut_mapping",
+            fetch=self._fetcher.fetch_fut_mapping,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "futures",
+        )
+
     def _sync_daily_partitioned(
         self,
         table_name: str,
@@ -555,7 +644,9 @@ class Pipeline:
         start_date: date | None,
         end_date: date | None,
         write_empty: bool = False,
+        data_dir: Path | None = None,
     ) -> None:
+        base_dir = data_dir or self._cfg.data_dir
         today = date.today()
         last = self._meta.get_last_date(table_name)
         if start_date is None:
@@ -589,7 +680,7 @@ class Pipeline:
             f"{table_name} 同步开始: {start} ~ {end}, 共 {len(trading_days)} 个交易日"
         )
         for processed, trade_date in enumerate(trading_days, start=1):
-            if daily_partition_exists(self._cfg.data_dir, table_name, trade_date):
+            if daily_partition_exists(base_dir, table_name, trade_date):
                 skipped_existing += 1
                 if _should_log_progress(processed, len(trading_days)):
                     _log_daily_progress(
@@ -606,7 +697,7 @@ class Pipeline:
                 df = fetch(trade_date)
                 time.sleep(0.2)
                 if not df.empty or write_empty:
-                    write_daily_partition(self._cfg.data_dir, table_name, trade_date, df)
+                    write_daily_partition(base_dir, table_name, trade_date, df)
                     if frontier is None or trade_date > frontier:
                         self._meta.update_last_date(table_name, trade_date)
                         frontier = trade_date

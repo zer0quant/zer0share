@@ -740,3 +740,136 @@ def test_sync_index_daily_updates_metastore(pipeline, cfg):
         pipeline.sync_index_daily()
 
     assert pipeline._meta.get_last_date("index_daily") == date(2024, 1, 2)
+
+
+# --- Futures pipeline tests ---
+
+from zer0share.fetcher import FUTURES_EXCHANGES
+
+
+def test_sync_fut_basic_writes_to_futures_subdir(pipeline, cfg):
+    def fut_basic_side_effect(exchange, fut_type):
+        return pd.DataFrame({
+            "ts_code": [f"CU2401.{exchange[:2]}"],
+            "symbol": ["CU2401"],
+            "exchange": [exchange],
+            "name": ["沪铜2401"],
+            "fut_code": ["CU"],
+            "multiplier": [None],
+            "trade_unit": ["5吨/手"],
+            "per_unit": [5.0],
+            "quote_unit": ["元/吨"],
+            "quote_unit_desc": ["10元/吨"],
+            "d_mode_desc": ["实物交割"],
+            "list_date": [date(2024, 1, 1)],
+            "delist_date": [date(2024, 1, 15)],
+            "d_month": [None],
+            "last_ddate": [None],
+            "trade_time_desc": [None],
+        })
+
+    pipeline._fetcher.fetch_fut_basic.side_effect = fut_basic_side_effect
+
+    with patch("zer0share.pipeline.time.sleep"), \
+         patch("zer0share.pipeline.date") as mock_date:
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_fut_basic()
+
+    assert (cfg.data_dir / "futures" / "fut_basic" / "date=20240102" / "data.parquet").exists()
+    assert pipeline._meta.get_last_date("fut_basic") == date(2024, 1, 2)
+
+
+def test_sync_fut_basic_calls_all_exchanges_and_types(pipeline, cfg):
+    pipeline._fetcher.fetch_fut_basic.return_value = pd.DataFrame()
+
+    with patch("zer0share.pipeline.time.sleep"), \
+         patch("zer0share.pipeline.date") as mock_date:
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_fut_basic()
+
+    assert pipeline._fetcher.fetch_fut_basic.call_count == len(FUTURES_EXCHANGES) * 2
+    for exchange in FUTURES_EXCHANGES:
+        pipeline._fetcher.fetch_fut_basic.assert_any_call(exchange, "1")
+        pipeline._fetcher.fetch_fut_basic.assert_any_call(exchange, "2")
+
+
+def test_sync_fut_basic_failure_sends_alert_and_raises(pipeline, cfg):
+    pipeline._fetcher.fetch_fut_basic.side_effect = RuntimeError("API error")
+    with pytest.raises(RuntimeError):
+        pipeline.sync_fut_basic()
+    pipeline._notifier.send.assert_called_once()
+    msg = pipeline._notifier.send.call_args[0][0]
+    assert "fut_basic 同步失败" in msg
+
+
+def _setup_futures_trade_cal(pipeline, cfg):
+    """Load SSE trade_cal with 2024-01-02 as open into DuckDB."""
+    trade_cal = pd.DataFrame({
+        "exchange": ["SSE"],
+        "cal_date": [date(2024, 1, 2)],
+        "is_open": [True],
+        "pretrade_date": [date(2023, 12, 29)],
+    })
+    write_trade_cal(cfg.data_dir, "SSE", trade_cal)
+    pipeline._meta.load_trade_cal_from_parquet(cfg.data_dir)
+    pipeline._meta.update_last_date("trade_cal", date(2024, 1, 2))
+
+
+def test_sync_fut_daily_writes_to_futures_subdir(pipeline, cfg):
+    _setup_futures_trade_cal(pipeline, cfg)
+    fut_df = pd.DataFrame({
+        "ts_code": ["CU2401.SHF"],
+        "trade_date": [date(2024, 1, 2)],
+        "pre_close": [50000.0],
+        "pre_settle": [50100.0],
+        "open": [50200.0],
+        "high": [50500.0],
+        "low": [49900.0],
+        "close": [50300.0],
+        "settle": [50250.0],
+        "change1": [200.0],
+        "change2": [150.0],
+        "vol": [10000.0],
+        "amount": [251250.0],
+        "oi": [50000.0],
+        "oi_chg": [500.0],
+        "delv_settle": [None],
+    })
+    pipeline._fetcher.fetch_fut_daily.return_value = fut_df
+    pipeline._meta.update_last_date("fut_daily", date(2024, 1, 1))
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_fut_daily()
+
+    assert (cfg.data_dir / "futures" / "fut_daily" / "date=20240102" / "data.parquet").exists()
+
+
+def test_sync_fut_daily_skips_existing_partitions(pipeline, cfg):
+    _setup_futures_trade_cal(pipeline, cfg)
+    pipeline._fetcher.fetch_fut_daily.return_value = pd.DataFrame()
+    pipeline._meta.update_last_date("fut_daily", date(2024, 1, 1))
+
+    from zer0share.storage import write_daily_partition
+    write_daily_partition(
+        cfg.data_dir / "futures", "fut_daily", date(2024, 1, 2),
+        pd.DataFrame({"ts_code": ["CU2401.SHF"], "trade_date": [date(2024, 1, 2)]}),
+    )
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_fut_daily()
+
+    pipeline._fetcher.fetch_fut_daily.assert_not_called()
+
+
+def test_sync_fut_daily_up_to_date(pipeline, cfg):
+    pipeline._meta.update_last_date("fut_daily", date.today())
+    pipeline.sync_fut_daily()
+    pipeline._fetcher.fetch_fut_daily.assert_not_called()

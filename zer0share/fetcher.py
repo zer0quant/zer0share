@@ -88,6 +88,44 @@ INDEX_DAILY_COLS = [
     "close", "pre_close", "change", "pct_chg", "vol", "amount",
 ]
 
+FUTURES_EXCHANGES = ["CZCE", "SHFE", "DCE", "CFFEX", "INE", "GFEX"]
+
+FUT_BASIC_COLS = [
+    "ts_code", "symbol", "exchange", "name", "fut_code",
+    "multiplier", "trade_unit", "per_unit", "quote_unit",
+    "quote_unit_desc", "d_mode_desc", "list_date", "delist_date",
+    "d_month", "last_ddate", "trade_time_desc",
+]
+
+FUT_DAILY_COLS = [
+    "ts_code", "trade_date", "pre_close", "pre_settle",
+    "open", "high", "low", "close", "settle",
+    "change1", "change2", "vol", "amount", "oi", "oi_chg",
+    "delv_settle",
+]
+
+FUT_HOLDING_COLS = [
+    "trade_date", "symbol", "broker", "vol", "vol_chg",
+    "long_hld", "long_chg", "short_hld", "short_chg", "exchange",
+]
+
+FUT_WSR_COLS = [
+    "trade_date", "symbol", "fut_name", "warehouse", "wh_id",
+    "pre_vol", "vol", "vol_chg", "area", "year", "grade",
+    "brand", "place", "pd", "is_ct", "unit", "exchange",
+]
+
+FUT_SETTLE_COLS = [
+    "ts_code", "trade_date", "settle", "trading_fee_rate",
+    "trading_fee", "delivery_fee", "b_hedging_margin_rate",
+    "s_hedging_margin_rate", "long_margin_rate", "short_margin_rate",
+    "offset_today_fee", "exchange",
+]
+
+FUT_MAPPING_COLS = [
+    "ts_code", "trade_date", "mapping_ts_code",
+]
+
 
 class TushareFetcher:
     def __init__(self, token: str):
@@ -220,6 +258,52 @@ class TushareFetcher:
         ).apply(lambda x: x.date() if not pd.isnull(x) else None)
         df["is_open"] = df["is_open"].astype(str).map({"1": True, "0": False}).astype(object)
         return df[TRADE_CAL_COLS]
+
+    def fetch_fut_basic(self, exchange: str, fut_type: str = "1") -> pd.DataFrame:
+        logger.debug(f"拉取期货合约: exchange={exchange}, fut_type={fut_type}")
+        df = self._pro.fut_basic(
+            exchange=exchange,
+            fut_type=fut_type,
+            fields=",".join(FUT_BASIC_COLS),
+        )
+        if df is None or df.empty:
+            return pd.DataFrame(columns=FUT_BASIC_COLS)
+        for col in ("list_date", "delist_date", "d_month", "last_ddate"):
+            if col in df.columns:
+                df[col] = pd.to_datetime(
+                    df[col], format="%Y%m%d", errors="coerce"
+                ).apply(lambda x: x.date() if not pd.isna(x) and not pd.isnull(x) else None)
+        return df[FUT_BASIC_COLS]
+
+    def fetch_fut_daily(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期货日线: {date_str}")
+        df = self._pro.fut_daily(trade_date=date_str, fields=",".join(FUT_DAILY_COLS))
+        return _format_trade_date(df, FUT_DAILY_COLS)
+
+    def fetch_fut_holding(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期货持仓排名: {date_str}")
+        df = self._pro.fut_holding(trade_date=date_str, fields=",".join(FUT_HOLDING_COLS))
+        return _format_trade_date(df, FUT_HOLDING_COLS)
+
+    def fetch_fut_wsr(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期货仓单: {date_str}")
+        df = self._pro.fut_wsr(trade_date=date_str, fields=",".join(FUT_WSR_COLS))
+        return _format_trade_date(df, FUT_WSR_COLS)
+
+    def fetch_fut_settle(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期货结算参数: {date_str}")
+        df = self._pro.fut_settle(trade_date=date_str, fields=",".join(FUT_SETTLE_COLS))
+        return _format_trade_date(df, FUT_SETTLE_COLS)
+
+    def fetch_fut_mapping(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期货主力映射: {date_str}")
+        df = self._pro.fut_mapping(trade_date=date_str, fields=",".join(FUT_MAPPING_COLS))
+        return _format_trade_date(df, FUT_MAPPING_COLS)
 
     SW_VERSIONS = ("SW2014", "SW2021")
 

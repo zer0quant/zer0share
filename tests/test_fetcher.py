@@ -546,3 +546,227 @@ def test_fetch_index_daily_returns_empty_when_empty_df(mock_pro):
     df = fetcher.fetch_index_daily("000300.SH", date(2024, 1, 1), date(2024, 1, 31))
 
     assert df.empty
+
+
+# --- Futures tests ---
+
+from zer0share.fetcher import (
+    FUT_BASIC_COLS, FUT_DAILY_COLS, FUT_HOLDING_COLS,
+    FUT_WSR_COLS, FUT_SETTLE_COLS, FUT_MAPPING_COLS,
+    FUTURES_EXCHANGES,
+)
+
+
+def _fut_basic_row(exchange: str = "SHFE", list_date: str = "20240101") -> dict:
+    return {
+        "ts_code": "CU2401.SHF",
+        "symbol": "CU2401",
+        "exchange": exchange,
+        "name": "沪铜2401",
+        "fut_code": "CU",
+        "multiplier": None,
+        "trade_unit": "5吨/手",
+        "per_unit": 5.0,
+        "quote_unit": "元(人民币)/吨",
+        "quote_unit_desc": "10元/吨",
+        "d_mode_desc": "实物交割",
+        "list_date": list_date,
+        "delist_date": "20240115",
+        "d_month": "202401",
+        "last_ddate": "20240115",
+        "trade_time_desc": None,
+    }
+
+
+def _fut_daily_row(ts_code: str = "CU2401.SHF", trade_date: str = "20240102") -> dict:
+    return {
+        "ts_code": ts_code,
+        "trade_date": trade_date,
+        "pre_close": 50000.0,
+        "pre_settle": 50100.0,
+        "open": 50200.0,
+        "high": 50500.0,
+        "low": 49900.0,
+        "close": 50300.0,
+        "settle": 50250.0,
+        "change1": 200.0,
+        "change2": 150.0,
+        "vol": 10000.0,
+        "amount": 251250.0,
+        "oi": 50000.0,
+        "oi_chg": 500.0,
+        "delv_settle": None,
+    }
+
+
+def test_futures_exchanges_has_six_entries():
+    assert len(FUTURES_EXCHANGES) == 6
+    assert "CZCE" in FUTURES_EXCHANGES
+    assert "SHFE" in FUTURES_EXCHANGES
+    assert "DCE" in FUTURES_EXCHANGES
+    assert "CFFEX" in FUTURES_EXCHANGES
+    assert "INE" in FUTURES_EXCHANGES
+    assert "GFEX" in FUTURES_EXCHANGES
+
+
+def test_fetch_fut_basic_returns_correct_columns(mock_pro):
+    mock_pro.fut_basic.return_value = pd.DataFrame([_fut_basic_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_basic("SHFE", "1")
+
+    assert list(df.columns) == FUT_BASIC_COLS
+    assert len(df) == 1
+
+
+def test_fetch_fut_basic_converts_dates(mock_pro):
+    mock_pro.fut_basic.return_value = pd.DataFrame([_fut_basic_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_basic("SHFE", "1")
+
+    assert df.iloc[0]["list_date"] == date(2024, 1, 1)
+    assert df.iloc[0]["delist_date"] == date(2024, 1, 15)
+
+
+def test_fetch_fut_basic_returns_empty_when_none(mock_pro):
+    mock_pro.fut_basic.return_value = None
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_basic("SHFE", "1")
+
+    assert df.empty
+    assert list(df.columns) == FUT_BASIC_COLS
+
+
+def test_fetch_fut_basic_calls_api_correctly(mock_pro):
+    mock_pro.fut_basic.return_value = pd.DataFrame([_fut_basic_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    fetcher.fetch_fut_basic("DCE", "2")
+
+    mock_pro.fut_basic.assert_called_once_with(
+        exchange="DCE",
+        fut_type="2",
+        fields=",".join(FUT_BASIC_COLS),
+    )
+
+
+def test_fetch_fut_daily_returns_correct_columns(mock_pro):
+    mock_pro.fut_daily.return_value = pd.DataFrame([_fut_daily_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_daily(date(2024, 1, 2))
+
+    assert list(df.columns) == FUT_DAILY_COLS
+    assert len(df) == 1
+    assert df.iloc[0]["trade_date"] == date(2024, 1, 2)
+
+
+def test_fetch_fut_daily_returns_empty_when_none(mock_pro):
+    mock_pro.fut_daily.return_value = None
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_daily(date(2024, 1, 1))
+
+    assert df.empty
+    assert list(df.columns) == FUT_DAILY_COLS
+
+
+def test_fetch_fut_daily_calls_api_with_date(mock_pro):
+    mock_pro.fut_daily.return_value = pd.DataFrame([_fut_daily_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    fetcher.fetch_fut_daily(date(2024, 1, 2))
+
+    mock_pro.fut_daily.assert_called_once_with(
+        trade_date="20240102",
+        fields=",".join(FUT_DAILY_COLS),
+    )
+
+
+def test_fetch_fut_holding_returns_correct_columns(mock_pro):
+    mock_pro.fut_holding.return_value = pd.DataFrame({
+        "trade_date": ["20240102"],
+        "symbol": ["CU"],
+        "broker": ["中信期货"],
+        "vol": [10000],
+        "vol_chg": [500],
+        "long_hld": [15000],
+        "long_chg": [200],
+        "short_hld": [12000],
+        "short_chg": [-100],
+        "exchange": ["SHFE"],
+    })
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_holding(date(2024, 1, 2))
+
+    assert list(df.columns) == FUT_HOLDING_COLS
+    assert len(df) == 1
+
+
+def test_fetch_fut_wsr_returns_correct_columns(mock_pro):
+    mock_pro.fut_wsr.return_value = pd.DataFrame({
+        "trade_date": ["20240102"],
+        "symbol": ["CU"],
+        "fut_name": ["沪铜"],
+        "warehouse": ["仓库A"],
+        "wh_id": ["WH001"],
+        "pre_vol": [100],
+        "vol": [120],
+        "vol_chg": [20],
+        "area": ["上海"],
+        "year": ["2024"],
+        "grade": [None],
+        "brand": [None],
+        "place": [None],
+        "pd": [0],
+        "is_ct": ["N"],
+        "unit": ["吨"],
+        "exchange": ["SHFE"],
+    })
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_wsr(date(2024, 1, 2))
+
+    assert list(df.columns) == FUT_WSR_COLS
+    assert len(df) == 1
+
+
+def test_fetch_fut_settle_returns_correct_columns(mock_pro):
+    mock_pro.fut_settle.return_value = pd.DataFrame({
+        "ts_code": ["CU2401.SHF"],
+        "trade_date": ["20240102"],
+        "settle": [50250.0],
+        "trading_fee_rate": [None],
+        "trading_fee": [None],
+        "delivery_fee": [None],
+        "b_hedging_margin_rate": [0.08],
+        "s_hedging_margin_rate": [0.08],
+        "long_margin_rate": [0.10],
+        "short_margin_rate": [0.10],
+        "offset_today_fee": [None],
+        "exchange": ["SHFE"],
+    })
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_settle(date(2024, 1, 2))
+
+    assert list(df.columns) == FUT_SETTLE_COLS
+    assert len(df) == 1
+
+
+def test_fetch_fut_mapping_returns_correct_columns(mock_pro):
+    mock_pro.fut_mapping.return_value = pd.DataFrame({
+        "ts_code": ["CU.SHF"],
+        "trade_date": ["20240102"],
+        "mapping_ts_code": ["CU2401.SHF"],
+    })
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_fut_mapping(date(2024, 1, 2))
+
+    assert list(df.columns) == FUT_MAPPING_COLS
+    assert len(df) == 1
+    assert df.iloc[0]["trade_date"] == date(2024, 1, 2)

@@ -12,6 +12,8 @@ daily_kline_minute = 0
 basic_hour = 8
 adj_factor_hour = 18
 adj_factor_minute = 5
+futures_hour = 17
+futures_start_minute = 0
 
 [notifier]
 wecom_webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"

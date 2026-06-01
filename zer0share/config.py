@@ -14,6 +14,8 @@ class Config:
     scheduler_basic_hour: int
     scheduler_adj_factor_hour: int
     scheduler_adj_factor_minute: int
+    scheduler_futures_hour: int
+    scheduler_futures_start_minute: int
     wecom_webhook_url: str
     notifier_enabled: bool
 
@@ -37,6 +39,8 @@ def load_config(path: Path = Path("config/settings.toml")) -> Config:
             scheduler_basic_hour=raw["scheduler"]["basic_hour"],
             scheduler_adj_factor_hour=raw["scheduler"]["adj_factor_hour"],
             scheduler_adj_factor_minute=raw["scheduler"]["adj_factor_minute"],
+            scheduler_futures_hour=raw["scheduler"]["futures_hour"],
+            scheduler_futures_start_minute=raw["scheduler"]["futures_start_minute"],
             wecom_webhook_url=raw["notifier"]["wecom_webhook_url"],
             notifier_enabled=raw["notifier"]["enabled"],
         )

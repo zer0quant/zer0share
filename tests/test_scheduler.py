@@ -16,6 +16,8 @@ daily_kline_minute = 0
 basic_hour = 8
 adj_factor_hour = 18
 adj_factor_minute = 5
+futures_hour = 17
+futures_start_minute = 0
 
 [notifier]
 wecom_webhook_url = "https://example.com"
@@ -47,8 +49,19 @@ def test_start_scheduler_registers_two_jobs(tmp_path):
 
         start_scheduler(str(cfg_file))
 
-    assert set(registered_jobs) == {"daily_kline", "index_daily", "basic", "adj_factor"}
-    assert len(registered_jobs) == 4
+    assert set(registered_jobs) == {
+        "daily_kline",
+        "index_daily",
+        "basic",
+        "adj_factor",
+        "fut_basic",
+        "fut_daily",
+        "fut_holding",
+        "fut_wsr",
+        "fut_settle",
+        "fut_mapping",
+    }
+    assert len(registered_jobs) == 10
 
 
 def test_start_scheduler_registers_basic_job_as_daily(tmp_path):
@@ -78,3 +91,9 @@ def test_start_scheduler_registers_basic_job_as_daily(tmp_path):
     assert cron_calls[1] == {"hour": 18, "minute": 0}
     assert cron_calls[2] == {"hour": 8}
     assert cron_calls[3] == {"hour": 18, "minute": 5}
+    assert cron_calls[4] == {"hour": 17, "minute": 0}
+    assert cron_calls[5] == {"hour": 17, "minute": 10}
+    assert cron_calls[6] == {"hour": 17, "minute": 20}
+    assert cron_calls[7] == {"hour": 17, "minute": 30}
+    assert cron_calls[8] == {"hour": 17, "minute": 40}
+    assert cron_calls[9] == {"hour": 17, "minute": 50}

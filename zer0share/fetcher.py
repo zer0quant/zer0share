@@ -268,7 +268,7 @@ class TushareFetcher:
         )
         if df is None or df.empty:
             return pd.DataFrame(columns=FUT_BASIC_COLS)
-        for col in ("list_date", "delist_date", "d_month", "last_ddate"):
+        for col in ("list_date", "delist_date", "last_ddate"):
             if col in df.columns:
                 df[col] = pd.to_datetime(
                     df[col], format="%Y%m%d", errors="coerce"

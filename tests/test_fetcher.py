@@ -627,6 +627,8 @@ def test_fetch_fut_basic_converts_dates(mock_pro):
 
     assert df.iloc[0]["list_date"] == date(2024, 1, 1)
     assert df.iloc[0]["delist_date"] == date(2024, 1, 15)
+    assert df.iloc[0]["d_month"] == "202401"  # kept as string, not converted to date
+    assert df.iloc[0]["last_ddate"] == date(2024, 1, 15)
 
 
 def test_fetch_fut_basic_returns_empty_when_none(mock_pro):

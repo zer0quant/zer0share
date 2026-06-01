@@ -39,6 +39,12 @@ SYNC_TABLES = [
     "index_daily",
     "industry",
     "ci_member",
+    "fut_basic",
+    "fut_daily",
+    "fut_holding",
+    "fut_wsr",
+    "fut_settle",
+    "fut_mapping",
 ]
 
 
@@ -69,6 +75,11 @@ def sync(
         "stk_limit",
         "index_weight",
         "index_daily",
+        "fut_daily",
+        "fut_holding",
+        "fut_wsr",
+        "fut_settle",
+        "fut_mapping",
     }
     if (start_date is not None or end_date is not None) and table not in range_tables:
         raise click.UsageError("date range options are only supported for daily partitioned tables")
@@ -131,6 +142,33 @@ def sync(
             pipeline.sync_industry()
         if sync_all or table == "ci_member":
             pipeline.sync_ci_member()
+        if sync_all or table == "fut_basic":
+            pipeline.sync_fut_basic()
+        if sync_all or table == "fut_daily":
+            pipeline.sync_fut_daily(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "fut_holding":
+            pipeline.sync_fut_holding(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "fut_wsr":
+            pipeline.sync_fut_wsr(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "fut_settle":
+            pipeline.sync_fut_settle(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "fut_mapping":
+            pipeline.sync_fut_mapping(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
 
 
 @cli.command("build-universe")

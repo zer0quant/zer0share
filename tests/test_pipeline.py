@@ -6,7 +6,7 @@ import pytest
 
 from zer0share.pipeline import Pipeline, EXCHANGES
 from zer0share.storage import read_sw_classify, read_sw_member, read_ci_member, write_basic, write_trade_cal
-from zer0share.fetcher import INDEX_DAILY_CODES
+from zer0share.fetcher import INDEX_DAILY_CODES, FUTURES_EXCHANGES, OPTIONS_EXCHANGES
 from zer0share.storage import daily_partition_exists
 
 
@@ -744,8 +744,6 @@ def test_sync_index_daily_updates_metastore(pipeline, cfg):
 
 # --- Futures pipeline tests ---
 
-from zer0share.fetcher import FUTURES_EXCHANGES
-
 
 def test_sync_fut_basic_writes_to_futures_subdir(pipeline, cfg):
     def fut_basic_side_effect(exchange, fut_type):
@@ -963,13 +961,11 @@ def test_sync_fut_weekly_detail_writes_to_futures_subdir(pipeline, cfg):
 
 # --- Options pipeline tests ---
 
-from zer0share.fetcher import OPTIONS_EXCHANGES
-
 
 def test_sync_opt_basic_writes_to_options_subdir(pipeline, cfg):
     def opt_basic_side_effect(exchange):
         return pd.DataFrame({
-            "ts_code": [f"10004462.SH"],
+            "ts_code": ["10004462.SH"],
             "symbol": ["10004462"],
             "exchange": [exchange],
             "name": ["50ETF购4月2700"],

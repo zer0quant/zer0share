@@ -74,6 +74,19 @@ def start_scheduler(config_path: str = "config/settings.toml") -> None:
                 ),
                 id=job_id,
             )
+        options_tables = [
+            ("opt_basic", pipeline.sync_opt_basic, 110),
+            ("opt_daily", pipeline.sync_opt_daily, 120),
+        ]
+        for job_id, func, offset in options_tables:
+            total_min = cfg.scheduler_futures_start_minute + offset
+            job_hour = cfg.scheduler_futures_hour + total_min // 60
+            job_minute = total_min % 60
+            scheduler.add_job(
+                func,
+                CronTrigger(hour=job_hour, minute=job_minute),
+                id=job_id,
+            )
         logger.info(
             f"调度器启动: daily_kline + index_daily 每天 "
             f"{cfg.scheduler_daily_kline_hour}:{cfg.scheduler_daily_kline_minute:02d}, "

@@ -50,6 +50,8 @@ SYNC_TABLES = [
     "fut_monthly",
     "fut_index_daily",
     "fut_weekly_detail",
+    "opt_basic",
+    "opt_daily",
 ]
 
 
@@ -90,6 +92,7 @@ def sync(
         "fut_monthly",
         "fut_index_daily",
         "fut_weekly_detail",
+        "opt_daily",
     }
     if (start_date is not None or end_date is not None) and table not in range_tables:
         raise click.UsageError("date range options are only supported for daily partitioned tables")
@@ -201,6 +204,13 @@ def sync(
             )
         if sync_all or table == "fut_weekly_detail":
             pipeline.sync_fut_weekly_detail(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "opt_basic":
+            pipeline.sync_opt_basic()
+        if sync_all or table == "opt_daily":
+            pipeline.sync_opt_daily(
                 start_date=parsed_start_date,
                 end_date=parsed_end_date,
             )

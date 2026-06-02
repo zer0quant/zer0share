@@ -338,3 +338,64 @@ def test_sync_all_includes_futures_batch2_tables():
     pipeline.sync_fut_monthly.assert_called_once()
     pipeline.sync_fut_index_daily.assert_called_once()
     pipeline.sync_fut_weekly_detail.assert_called_once()
+
+
+def test_sync_opt_basic_calls_pipeline():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(cli, ["sync", "--table", "opt_basic"])
+
+    assert result.exit_code == 0
+    pipeline.sync_opt_basic.assert_called_once()
+
+
+def test_sync_opt_daily_accepts_date_range():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(
+            cli,
+            ["sync", "--table", "opt_daily", "--start-date", "2024-01-01", "--end-date", "2024-01-31"],
+        )
+
+    assert result.exit_code == 0
+    pipeline.sync_opt_daily.assert_called_once_with(
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 1, 31),
+    )
+
+
+def test_sync_opt_basic_rejects_date_range():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(
+            cli, ["sync", "--table", "opt_basic", "--start-date", "2024-01-01"]
+        )
+
+    assert result.exit_code != 0
+    assert "date range options" in result.output
+
+
+def test_sync_all_includes_options_tables():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(cli, ["sync", "--all"])
+
+    assert result.exit_code == 0
+    pipeline.sync_opt_basic.assert_called_once()
+    pipeline.sync_opt_daily.assert_called_once()

@@ -65,8 +65,10 @@ def test_start_scheduler_registers_two_jobs(tmp_path):
         "fut_monthly",
         "fut_index_daily",
         "fut_weekly_detail",
+        "opt_basic",
+        "opt_daily",
     }
-    assert len(registered_jobs) == 15
+    assert len(registered_jobs) == 17
 
 
 def test_start_scheduler_registers_basic_job_as_daily(tmp_path):
@@ -107,3 +109,5 @@ def test_start_scheduler_registers_basic_job_as_daily(tmp_path):
     assert cron_calls[12] == {"hour": 18, "minute": 20}
     assert cron_calls[13] == {"hour": 18, "minute": 30}
     assert cron_calls[14] == {"hour": 18, "minute": 40}
+    assert cron_calls[15] == {"hour": 18, "minute": 50}   # opt_basic (offset 110)
+    assert cron_calls[16] == {"hour": 19, "minute": 0}    # opt_daily (offset 120)

@@ -1317,6 +1317,10 @@ def test_opt_basic_query_returns_data(tmp_path):
     result = api.opt_basic()
     assert len(result) == 2
     assert set(result["ts_code"]) == {"10004462.SH", "10004463.SH"}
+    row = result[result["ts_code"] == "10004462.SH"].iloc[0]
+    assert row["list_date"] == "20240101"
+    assert row["maturity_date"] == "20240424"
+    assert row["delist_date"] == "20240424"
 
 
 def test_opt_basic_query_filters_by_call_put(tmp_path):
@@ -1376,6 +1380,36 @@ def test_opt_daily_query_raises_when_no_data(tmp_path):
         api.opt_daily(trade_date="20240102")
 
 
+def test_opt_daily_query_filters_by_exchange(tmp_path):
+    from datetime import date as dt
+    rows = []
+    for ts_code in ["10004462.SH", "10004463.SH"]:
+        rows.append({
+            "ts_code": ts_code,
+            "trade_date": dt(2024, 1, 2),
+            "exchange": "SSE",
+            "pre_settle": 0.15, "pre_close": 0.148,
+            "open": 0.152, "high": 0.16, "low": 0.148,
+            "close": 0.155, "settle": 0.154,
+            "vol": 5000.0, "amount": 7700000.0, "oi": 20000.0,
+        })
+    rows.append({
+        "ts_code": "90000001.SZ",
+        "trade_date": dt(2024, 1, 2),
+        "exchange": "SZSE",
+        "pre_settle": 0.2, "pre_close": 0.19,
+        "open": 0.21, "high": 0.22, "low": 0.19,
+        "close": 0.205, "settle": 0.204,
+        "vol": 3000.0, "amount": 6120000.0, "oi": 10000.0,
+    })
+    write_daily_partition(tmp_path / "options", "opt_daily", dt(2024, 1, 2), pd.DataFrame(rows))
+
+    api = LocalPro(tmp_path)
+    result = api.opt_daily(trade_date="20240102", exchange="SSE")
+    assert len(result) == 2
+    assert all(result["exchange"] == "SSE")
+
+
 def test_query_dispatch_supports_options(tmp_path):
     from datetime import date as dt
     _write_opt_daily_data(tmp_path, dt(2024, 1, 2))
@@ -1383,3 +1417,29 @@ def test_query_dispatch_supports_options(tmp_path):
     api = LocalPro(tmp_path)
     result = api.query("opt_daily", trade_date="20240102")
     assert len(result) == 2
+
+
+def test_query_dispatch_supports_opt_basic(tmp_path):
+    from datetime import date as dt
+    df = pd.DataFrame({
+        "ts_code": ["10004462.SH"],
+        "symbol": ["10004462"],
+        "exchange": ["SSE"],
+        "name": ["50ETF购4月2700"],
+        "per_unit": [10000.0],
+        "opt_code": ["OP510050"],
+        "opt_type": ["E"],
+        "call_put": ["C"],
+        "exercise_type": ["E"],
+        "exercise_price": [2.7],
+        "s_month": ["202404"],
+        "maturity_date": ["20240424"],
+        "list_date": ["20240101"],
+        "delist_date": ["20240424"],
+    })
+    write_daily_partition(tmp_path / "options", "opt_basic", dt(2024, 1, 2), df)
+
+    api = LocalPro(tmp_path)
+    result = api.query("opt_basic")
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "10004462.SH"

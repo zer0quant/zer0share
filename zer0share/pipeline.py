@@ -6,7 +6,7 @@ import pandas as pd
 from loguru import logger
 
 from zer0share.config import Config
-from zer0share.fetcher import TushareFetcher, INDEX_DAILY_CODES, FUTURES_EXCHANGES
+from zer0share.fetcher import TushareFetcher, INDEX_DAILY_CODES, FUTURES_EXCHANGES, OPTIONS_EXCHANGES
 from zer0share.notifier import Notifier
 from zer0share.storage import (
     MetaStore,
@@ -602,6 +602,41 @@ class Pipeline:
             start_date=start_date,
             end_date=end_date,
             data_dir=self._cfg.data_dir / "futures",
+        )
+
+    def sync_opt_basic(self) -> None:
+        today = date.today()
+        options_dir = self._cfg.data_dir / "options"
+        all_frames = []
+        try:
+            for exchange in OPTIONS_EXCHANGES:
+                df = self._fetcher.fetch_opt_basic(exchange)
+                time.sleep(0.2)
+                if not df.empty:
+                    all_frames.append(df)
+            if all_frames:
+                combined = pd.concat(all_frames, ignore_index=True)
+            else:
+                combined = pd.DataFrame()
+            write_daily_partition(options_dir, "opt_basic", today, combined)
+            self._meta.update_last_date("opt_basic", today)
+            logger.info(f"opt_basic 同步完成: {len(combined)} 条")
+        except Exception as e:
+            logger.error(f"opt_basic 同步失败: {e}")
+            self._notifier.send(f"opt_basic 同步失败: {e}")
+            raise
+
+    def sync_opt_daily(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="opt_daily",
+            fetch=self._fetcher.fetch_opt_daily,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "options",
         )
 
     def sync_fut_holding(

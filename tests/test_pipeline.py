@@ -959,3 +959,129 @@ def test_sync_fut_weekly_detail_writes_to_futures_subdir(pipeline, cfg):
     if futures_dir.exists():
         partitions = list(futures_dir.iterdir())
         assert len(partitions) >= 1
+
+
+# --- Options pipeline tests ---
+
+from zer0share.fetcher import OPTIONS_EXCHANGES
+
+
+def test_sync_opt_basic_writes_to_options_subdir(pipeline, cfg):
+    def opt_basic_side_effect(exchange):
+        return pd.DataFrame({
+            "ts_code": [f"10004462.SH"],
+            "symbol": ["10004462"],
+            "exchange": [exchange],
+            "name": ["50ETF购4月2700"],
+            "per_unit": [10000.0],
+            "opt_code": ["OP510050"],
+            "opt_type": ["E"],
+            "call_put": ["C"],
+            "exercise_type": ["E"],
+            "exercise_price": [2.7],
+            "s_month": ["202404"],
+            "maturity_date": [date(2024, 4, 24)],
+            "list_date": [date(2024, 1, 1)],
+            "delist_date": [date(2024, 4, 24)],
+        })
+
+    pipeline._fetcher.fetch_opt_basic.side_effect = opt_basic_side_effect
+
+    with patch("zer0share.pipeline.time.sleep"), \
+         patch("zer0share.pipeline.date") as mock_date:
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_opt_basic()
+
+    assert (cfg.data_dir / "options" / "opt_basic" / "date=20240102" / "data.parquet").exists()
+    assert pipeline._meta.get_last_date("opt_basic") == date(2024, 1, 2)
+
+
+def test_sync_opt_basic_calls_all_exchanges(pipeline, cfg):
+    pipeline._fetcher.fetch_opt_basic.return_value = pd.DataFrame()
+
+    with patch("zer0share.pipeline.time.sleep"), \
+         patch("zer0share.pipeline.date") as mock_date:
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_opt_basic()
+
+    assert pipeline._fetcher.fetch_opt_basic.call_count == len(OPTIONS_EXCHANGES)
+    for exchange in OPTIONS_EXCHANGES:
+        pipeline._fetcher.fetch_opt_basic.assert_any_call(exchange)
+
+
+def test_sync_opt_basic_failure_sends_alert_and_raises(pipeline, cfg):
+    pipeline._fetcher.fetch_opt_basic.side_effect = RuntimeError("API error")
+    with pytest.raises(RuntimeError):
+        pipeline.sync_opt_basic()
+    pipeline._notifier.send.assert_called_once()
+    msg = pipeline._notifier.send.call_args[0][0]
+    assert "opt_basic 同步失败" in msg
+
+
+def _setup_options_trade_cal(pipeline, cfg):
+    trade_cal = pd.DataFrame({
+        "exchange": ["SSE"],
+        "cal_date": [date(2024, 1, 2)],
+        "is_open": [True],
+        "pretrade_date": [date(2023, 12, 29)],
+    })
+    write_trade_cal(cfg.data_dir, "SSE", trade_cal)
+    pipeline._meta.load_trade_cal_from_parquet(cfg.data_dir)
+    pipeline._meta.update_last_date("trade_cal", date(2024, 1, 2))
+
+
+def test_sync_opt_daily_writes_to_options_subdir(pipeline, cfg):
+    _setup_options_trade_cal(pipeline, cfg)
+    opt_df = pd.DataFrame({
+        "ts_code": ["10004462.SH"],
+        "trade_date": [date(2024, 1, 2)],
+        "exchange": ["SSE"],
+        "pre_settle": [0.15],
+        "pre_close": [0.148],
+        "open": [0.152],
+        "high": [0.16],
+        "low": [0.148],
+        "close": [0.155],
+        "settle": [0.154],
+        "vol": [5000.0],
+        "amount": [7700000.0],
+        "oi": [20000.0],
+    })
+    pipeline._fetcher.fetch_opt_daily.return_value = opt_df
+    pipeline._meta.update_last_date("opt_daily", date(2024, 1, 1))
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_opt_daily()
+
+    assert (cfg.data_dir / "options" / "opt_daily" / "date=20240102" / "data.parquet").exists()
+
+
+def test_sync_opt_daily_skips_existing_partitions(pipeline, cfg):
+    from zer0share.storage import write_daily_partition
+    _setup_options_trade_cal(pipeline, cfg)
+    pipeline._fetcher.fetch_opt_daily.return_value = pd.DataFrame()
+    pipeline._meta.update_last_date("opt_daily", date(2024, 1, 1))
+
+    write_daily_partition(
+        cfg.data_dir / "options", "opt_daily", date(2024, 1, 2),
+        pd.DataFrame({"ts_code": ["10004462.SH"], "trade_date": [date(2024, 1, 2)]}),
+    )
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_opt_daily()
+
+    pipeline._fetcher.fetch_opt_daily.assert_not_called()
+
+
+def test_sync_opt_daily_up_to_date(pipeline, cfg):
+    pipeline._meta.update_last_date("opt_daily", date.today())
+    pipeline.sync_opt_daily()
+    pipeline._fetcher.fetch_opt_daily.assert_not_called()

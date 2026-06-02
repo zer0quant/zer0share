@@ -26,7 +26,7 @@ A-股数据本地化管道，基于 [Tushare Pro](https://tushare.pro) 拉取股
 
 - Python 3.11+
 - [uv](https://github.com/astral-sh/uv)
-- Tushare Pro Token（基础行情需积分 ≥ 2000；`stock_st` 需积分 ≥ 3000；中信行业成分需积分 ≥ 5000）
+- Tushare Pro Token（基础行情需积分 ≥ 2000；`stock_st` 需积分 ≥ 3000；中信行业成分需积分 ≥ 5000；部分期货扩展数据需积分 ≥ 5000）
 
 ## 快速开始
 
@@ -70,6 +70,17 @@ uv run python main.py sync --table index_weight # 沪深300/中证500/中证1000
 uv run python main.py sync --table index_daily  # 宽基指数日线行情
 uv run python main.py sync --table industry    # 申万行业分类 + 成分映射
 uv run python main.py sync --table ci_member   # 中信行业成分映射
+uv run python main.py sync --table fut_basic   # 期货合约基础信息
+uv run python main.py sync --table fut_daily   # 期货日线行情
+uv run python main.py sync --table fut_holding # 期货持仓排名
+uv run python main.py sync --table fut_wsr     # 期货仓单日报
+uv run python main.py sync --table fut_settle  # 期货结算参数
+uv run python main.py sync --table fut_mapping # 期货主力与连续合约映射
+uv run python main.py sync --table ft_limit    # 期货涨跌停价格
+uv run python main.py sync --table fut_weekly  # 期货周线行情
+uv run python main.py sync --table fut_monthly # 期货月线行情
+uv run python main.py sync --table fut_index_daily    # 期货指数日线行情
+uv run python main.py sync --table fut_weekly_detail  # 期货交易所周度明细
 ```
 
 首次验证建议先同步一个小区间，确认 Tushare 权限和字段可用后再全量回填：
@@ -80,6 +91,8 @@ uv run python main.py sync --table stock_st --start-date 2024-01-01 --end-date 2
 uv run python main.py sync --table suspend_d --start-date 2024-01-01 --end-date 2024-01-31
 uv run python main.py sync --table stk_limit --start-date 2024-01-01 --end-date 2024-01-31
 uv run python main.py sync --table index_weight --start-date 2024-01-01 --end-date 2024-01-31
+uv run python main.py sync --table fut_daily --start-date 2024-01-01 --end-date 2024-01-31
+uv run python main.py sync --table ft_limit --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
 ### 4. 构建股票池
@@ -259,6 +272,17 @@ db/
 | `sync --table index_daily` | 增量同步12个宽基指数日线行情 |
 | `sync --table industry` | 同步申万行业分类 + 成分映射（全量覆盖） |
 | `sync --table ci_member` | 同步中信行业成分映射（全量覆盖） |
+| `sync --table fut_basic` | 同步期货合约基础信息 |
+| `sync --table fut_daily` | 增量同步期货日线行情 |
+| `sync --table fut_holding` | 增量同步期货持仓排名 |
+| `sync --table fut_wsr` | 增量同步期货仓单日报 |
+| `sync --table fut_settle` | 增量同步期货结算参数 |
+| `sync --table fut_mapping` | 增量同步期货主力与连续合约映射 |
+| `sync --table ft_limit` | 增量同步期货涨跌停价格 |
+| `sync --table fut_weekly` | 增量同步期货周线行情 |
+| `sync --table fut_monthly` | 增量同步期货月线行情 |
+| `sync --table fut_index_daily` | 增量同步期货指数日线行情 |
+| `sync --table fut_weekly_detail` | 增量同步期货交易所周度明细 |
 | `sync --all` | 按顺序同步全部 |
 | `build-universe` | 从 2016-01-01 到今天增量构建 5 个股票池 |
 | `build-universe --start-date YYYY-MM-DD --end-date YYYY-MM-DD` | 构建指定区间的 5 个股票池 |
@@ -283,6 +307,8 @@ daily_kline_minute = 0
 basic_hour = 8             # 基础信息同步触发时间（小时）
 adj_factor_hour = 18       # 复权因子同步触发时间（小时）
 adj_factor_minute = 5
+futures_hour = 17          # 期货同步起始时间（小时）
+futures_start_minute = 0
 
 [notifier]
 wecom_webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"

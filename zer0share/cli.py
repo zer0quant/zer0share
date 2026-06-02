@@ -45,6 +45,11 @@ SYNC_TABLES = [
     "fut_wsr",
     "fut_settle",
     "fut_mapping",
+    "ft_limit",
+    "fut_weekly",
+    "fut_monthly",
+    "fut_index_daily",
+    "fut_weekly_detail",
 ]
 
 
@@ -80,6 +85,11 @@ def sync(
         "fut_wsr",
         "fut_settle",
         "fut_mapping",
+        "ft_limit",
+        "fut_weekly",
+        "fut_monthly",
+        "fut_index_daily",
+        "fut_weekly_detail",
     }
     if (start_date is not None or end_date is not None) and table not in range_tables:
         raise click.UsageError("date range options are only supported for daily partitioned tables")
@@ -166,6 +176,31 @@ def sync(
             )
         if sync_all or table == "fut_mapping":
             pipeline.sync_fut_mapping(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "ft_limit":
+            pipeline.sync_ft_limit(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "fut_weekly":
+            pipeline.sync_fut_weekly(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "fut_monthly":
+            pipeline.sync_fut_monthly(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "fut_index_daily":
+            pipeline.sync_fut_index_daily(
+                start_date=parsed_start_date,
+                end_date=parsed_end_date,
+            )
+        if sync_all or table == "fut_weekly_detail":
+            pipeline.sync_fut_weekly_detail(
                 start_date=parsed_start_date,
                 end_date=parsed_end_date,
             )

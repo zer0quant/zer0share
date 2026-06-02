@@ -33,13 +33,15 @@ daily_kline_minute = 0
 basic_hour = 8
 adj_factor_hour = 18
 adj_factor_minute = 5
+futures_hour = 17
+futures_start_minute = 0
 
 [notifier]
 wecom_webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
 enabled = false
 ```
 
-> Tushare Token 在 [tushare.pro](https://tushare.pro) 注册后获取，需要积分 >= 2000 才能调用 `daily` 接口。
+> Tushare Token 在 [tushare.pro](https://tushare.pro) 注册后获取，需要积分 >= 2000 才能调用基础行情接口；`stock_st` 需积分 >= 3000，中信行业和部分期货扩展数据需更高积分。
 
 ---
 
@@ -101,10 +103,37 @@ uv run python main.py sync --table adj_factor
 
 ## 一键同步全部
 
-以上四步可合并为一条命令，顺序固定为 trade_cal → basic → daily_kline → adj_factor：
+常用表可合并为一条命令。当前 `--all` 会按 CLI 中固定顺序同步股票、指数、行业和期货数据：
 
 ```bash
 uv run python main.py sync --all
+```
+
+也可以分组逐步同步：
+
+```bash
+# 股票和指数扩展数据
+uv run python main.py sync --table daily_basic
+uv run python main.py sync --table stock_st
+uv run python main.py sync --table suspend_d
+uv run python main.py sync --table stk_limit
+uv run python main.py sync --table index_weight
+uv run python main.py sync --table index_daily
+uv run python main.py sync --table industry
+uv run python main.py sync --table ci_member
+
+# 期货数据
+uv run python main.py sync --table fut_basic
+uv run python main.py sync --table fut_daily
+uv run python main.py sync --table fut_holding
+uv run python main.py sync --table fut_wsr
+uv run python main.py sync --table fut_settle
+uv run python main.py sync --table fut_mapping
+uv run python main.py sync --table ft_limit
+uv run python main.py sync --table fut_weekly
+uv run python main.py sync --table fut_monthly
+uv run python main.py sync --table fut_index_daily
+uv run python main.py sync --table fut_weekly_detail
 ```
 
 ---
@@ -133,6 +162,11 @@ adj_factor   last sync: 2026-04-17
 ```bash
 # 每个交易日收盘后更新日线行情
 uv run python main.py sync --table daily_kline
+
+# 指定日期范围更新日分区表
+uv run python main.py sync --table daily_basic --start-date 2024-01-01 --end-date 2024-01-31
+uv run python main.py sync --table fut_daily --start-date 2024-01-01 --end-date 2024-01-31
+uv run python main.py sync --table ft_limit --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
 ---
@@ -150,8 +184,10 @@ uv run python main.py scheduler start
 | 任务 | 触发时间 | 说明 |
 |------|----------|------|
 | daily_kline | 每天 18:00 | 仅交易日写入数据，非交易日自动跳过 |
+| index_daily | 每天 18:00 | 同步宽基指数日线行情 |
 | adj_factor | 每天 18:05 | 仅交易日写入数据，非交易日自动跳过 |
 | basic | 每天 08:00 | 每日全量刷新 |
+| futures | 每天 17:00 起 | 依次同步 11 个期货任务，每个任务间隔 10 分钟 |
 
 > 调度器需保持进程运行。生产环境建议配合 `systemd` 或 `supervisor` 管理进程。
 
@@ -172,10 +208,38 @@ data/
 │   ├── date=20160104/data.parquet
 │   ├── date=20160105/data.parquet
 │   └── ...
-└── adj_factor/
-    ├── date=20160104/data.parquet
-    ├── date=20160105/data.parquet
-    └── ...
+├── adj_factor/
+│   ├── date=20160104/data.parquet
+│   ├── date=20160105/data.parquet
+│   └── ...
+├── daily_basic/
+│   └── date=20160104/data.parquet
+├── stock_st/
+│   └── date=20160104/data.parquet
+├── suspend_d/
+│   └── date=20160104/data.parquet
+├── stk_limit/
+│   └── date=20160104/data.parquet
+├── index_weight/
+│   └── index_code=399300.SZ/date=20160104/data.parquet
+├── index_daily/
+│   └── date=20160104/data.parquet
+├── industry/
+│   ├── sw_classify/data.parquet
+│   ├── sw_member/data.parquet
+│   └── ci_member/data.parquet
+├── futures/
+│   ├── fut_basic/date=YYYYMMDD/data.parquet
+│   ├── fut_daily/date=YYYYMMDD/data.parquet
+│   ├── fut_holding/date=YYYYMMDD/data.parquet
+│   ├── fut_wsr/date=YYYYMMDD/data.parquet
+│   ├── fut_settle/date=YYYYMMDD/data.parquet
+│   ├── fut_mapping/date=YYYYMMDD/data.parquet
+│   ├── ft_limit/date=YYYYMMDD/data.parquet
+│   ├── fut_weekly/date=YYYYMMDD/data.parquet
+│   ├── fut_monthly/date=YYYYMMDD/data.parquet
+│   ├── fut_index_daily/date=YYYYMMDD/data.parquet
+│   └── fut_weekly_detail/date=YYYYMMDD/data.parquet
 db/
 └── meta.duckdb
 logs/

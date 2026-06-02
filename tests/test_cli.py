@@ -267,3 +267,74 @@ def test_sync_all_includes_futures_tables():
     pipeline.sync_fut_wsr.assert_called_once()
     pipeline.sync_fut_settle.assert_called_once()
     pipeline.sync_fut_mapping.assert_called_once()
+
+
+def test_sync_ft_limit_accepts_date_range():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(
+            cli,
+            [
+                "sync",
+                "--table",
+                "ft_limit",
+                "--start-date",
+                "2024-01-01",
+                "--end-date",
+                "2024-01-31",
+            ],
+        )
+
+    assert result.exit_code == 0
+    pipeline.sync_ft_limit.assert_called_once_with(
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 1, 31),
+    )
+
+
+def test_sync_fut_weekly_detail_accepts_date_range():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(
+            cli,
+            [
+                "sync",
+                "--table",
+                "fut_weekly_detail",
+                "--start-date",
+                "2024-01-01",
+                "--end-date",
+                "2024-01-31",
+            ],
+        )
+
+    assert result.exit_code == 0
+    pipeline.sync_fut_weekly_detail.assert_called_once_with(
+        start_date=date(2024, 1, 1),
+        end_date=date(2024, 1, 31),
+    )
+
+
+def test_sync_all_includes_futures_batch2_tables():
+    runner = CliRunner()
+    pipeline = MagicMock()
+    pipeline.__enter__.return_value = pipeline
+    pipeline.__exit__.return_value = False
+
+    with patch("zer0share.cli._make_pipeline", return_value=pipeline):
+        result = runner.invoke(cli, ["sync", "--all"])
+
+    assert result.exit_code == 0
+    pipeline.sync_ft_limit.assert_called_once()
+    pipeline.sync_fut_weekly.assert_called_once()
+    pipeline.sync_fut_monthly.assert_called_once()
+    pipeline.sync_fut_index_daily.assert_called_once()
+    pipeline.sync_fut_weekly_detail.assert_called_once()

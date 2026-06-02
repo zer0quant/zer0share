@@ -90,6 +90,22 @@ INDEX_DAILY_COLS = [
 
 FUTURES_EXCHANGES = ["CZCE", "SHFE", "DCE", "CFFEX", "INE", "GFEX"]
 
+OPTIONS_EXCHANGES = ["SSE", "SZSE", "CFFEX", "DCE", "SHFE", "CZCE"]
+
+OPT_BASIC_COLS = [
+    "ts_code", "symbol", "exchange", "name", "per_unit",
+    "opt_code", "opt_type", "call_put", "exercise_type",
+    "exercise_price", "s_month", "maturity_date",
+    "list_date", "delist_date",
+]
+
+OPT_DAILY_COLS = [
+    "ts_code", "trade_date", "exchange",
+    "pre_settle", "pre_close",
+    "open", "high", "low", "close", "settle",
+    "vol", "amount", "oi",
+]
+
 FUT_BASIC_COLS = [
     "ts_code", "symbol", "exchange", "name", "fut_code",
     "multiplier", "trade_unit", "per_unit", "quote_unit",
@@ -372,6 +388,24 @@ class TushareFetcher:
                 df["week_date"], format="%Y%m%d", errors="coerce"
             ).apply(lambda x: x.date() if not pd.isna(x) and not pd.isnull(x) else None)
         return df[FUT_WEEKLY_DETAIL_COLS]
+
+    def fetch_opt_basic(self, exchange: str) -> pd.DataFrame:
+        logger.debug(f"拉取期权合约: exchange={exchange}")
+        df = self._pro.opt_basic(exchange=exchange, fields=",".join(OPT_BASIC_COLS))
+        if df is None or df.empty:
+            return pd.DataFrame(columns=OPT_BASIC_COLS)
+        for col in ("list_date", "delist_date", "maturity_date"):
+            if col in df.columns:
+                df[col] = pd.to_datetime(
+                    df[col], format="%Y%m%d", errors="coerce"
+                ).apply(lambda x: x.date() if not pd.isna(x) and not pd.isnull(x) else None)
+        return df[OPT_BASIC_COLS]
+
+    def fetch_opt_daily(self, trade_date: date) -> pd.DataFrame:
+        date_str = trade_date.strftime("%Y%m%d")
+        logger.debug(f"拉取期权日线: {date_str}")
+        df = self._pro.opt_daily(trade_date=date_str, fields=",".join(OPT_DAILY_COLS))
+        return _format_trade_date(df, OPT_DAILY_COLS)
 
     SW_VERSIONS = ("SW2014", "SW2021")
 

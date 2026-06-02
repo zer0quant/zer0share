@@ -964,3 +964,133 @@ def test_fetch_fut_weekly_detail_returns_empty_when_none(mock_pro):
 
     assert df.empty
     assert list(df.columns) == FUT_WEEKLY_DETAIL_COLS
+
+
+# --- Options fetcher tests ---
+
+from zer0share.fetcher import (
+    OPTIONS_EXCHANGES, OPT_BASIC_COLS, OPT_DAILY_COLS,
+)
+
+
+def _opt_basic_row(exchange: str = "SSE", list_date: str = "20240101") -> dict:
+    return {
+        "ts_code": "10004462.SH",
+        "symbol": "10004462",
+        "exchange": exchange,
+        "name": "50ETF购4月2700",
+        "per_unit": 10000.0,
+        "opt_code": "OP510050",
+        "opt_type": "E",
+        "call_put": "C",
+        "exercise_type": "E",
+        "exercise_price": 2.7,
+        "s_month": "202404",
+        "maturity_date": "20240424",
+        "list_date": list_date,
+        "delist_date": "20240424",
+    }
+
+
+def _opt_daily_row(ts_code: str = "10004462.SH", trade_date: str = "20240102") -> dict:
+    return {
+        "ts_code": ts_code,
+        "trade_date": trade_date,
+        "exchange": "SSE",
+        "pre_settle": 0.15,
+        "pre_close": 0.148,
+        "open": 0.152,
+        "high": 0.16,
+        "low": 0.148,
+        "close": 0.155,
+        "settle": 0.154,
+        "vol": 5000.0,
+        "amount": 7700000.0,
+        "oi": 20000.0,
+    }
+
+
+def test_options_exchanges_has_six_entries():
+    assert len(OPTIONS_EXCHANGES) == 6
+    assert "SSE" in OPTIONS_EXCHANGES
+    assert "SZSE" in OPTIONS_EXCHANGES
+    assert "CFFEX" in OPTIONS_EXCHANGES
+    assert "DCE" in OPTIONS_EXCHANGES
+    assert "SHFE" in OPTIONS_EXCHANGES
+    assert "CZCE" in OPTIONS_EXCHANGES
+
+
+def test_fetch_opt_basic_returns_correct_columns(mock_pro):
+    mock_pro.opt_basic.return_value = pd.DataFrame([_opt_basic_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_opt_basic("SSE")
+
+    assert list(df.columns) == OPT_BASIC_COLS
+    assert len(df) == 1
+
+
+def test_fetch_opt_basic_converts_dates(mock_pro):
+    mock_pro.opt_basic.return_value = pd.DataFrame([_opt_basic_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_opt_basic("SSE")
+
+    assert df.iloc[0]["list_date"] == date(2024, 1, 1)
+    assert df.iloc[0]["delist_date"] == date(2024, 4, 24)
+    assert df.iloc[0]["maturity_date"] == date(2024, 4, 24)
+
+
+def test_fetch_opt_basic_returns_empty_when_none(mock_pro):
+    mock_pro.opt_basic.return_value = None
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_opt_basic("SSE")
+
+    assert df.empty
+    assert list(df.columns) == OPT_BASIC_COLS
+
+
+def test_fetch_opt_basic_calls_api_correctly(mock_pro):
+    mock_pro.opt_basic.return_value = pd.DataFrame([_opt_basic_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    fetcher.fetch_opt_basic("CFFEX")
+
+    mock_pro.opt_basic.assert_called_once_with(
+        exchange="CFFEX",
+        fields=",".join(OPT_BASIC_COLS),
+    )
+
+
+def test_fetch_opt_daily_returns_correct_columns(mock_pro):
+    mock_pro.opt_daily.return_value = pd.DataFrame([_opt_daily_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_opt_daily(date(2024, 1, 2))
+
+    assert list(df.columns) == OPT_DAILY_COLS
+    assert len(df) == 1
+    assert df.iloc[0]["trade_date"] == date(2024, 1, 2)
+
+
+def test_fetch_opt_daily_returns_empty_when_none(mock_pro):
+    mock_pro.opt_daily.return_value = None
+    fetcher = TushareFetcher("fake_token")
+
+    df = fetcher.fetch_opt_daily(date(2024, 1, 1))
+
+    assert df.empty
+    assert list(df.columns) == OPT_DAILY_COLS
+
+
+def test_fetch_opt_daily_calls_api_with_date(mock_pro):
+    mock_pro.opt_daily.return_value = pd.DataFrame([_opt_daily_row()])
+    fetcher = TushareFetcher("fake_token")
+
+    fetcher.fetch_opt_daily(date(2024, 1, 2))
+
+    mock_pro.opt_daily.assert_called_once_with(
+        trade_date="20240102",
+        fields=",".join(OPT_DAILY_COLS),
+    )

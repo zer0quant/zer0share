@@ -1262,3 +1262,124 @@ def test_batch2_query_dispatch(tmp_path):
 
     result = api.query("ft_limit", trade_date="20240102")
     assert len(result) == 1
+
+
+# --- Options API tests ---
+
+from zer0share.fetcher import OPT_BASIC_COLS, OPT_DAILY_COLS
+
+
+def _write_opt_daily_data(data_dir, trade_date, ts_codes=None):
+    ts_codes = ts_codes or ["10004462.SH", "10004463.SH"]
+    rows = []
+    for ts_code in ts_codes:
+        rows.append({
+            "ts_code": ts_code,
+            "trade_date": trade_date,
+            "exchange": "SSE",
+            "pre_settle": 0.15,
+            "pre_close": 0.148,
+            "open": 0.152,
+            "high": 0.16,
+            "low": 0.148,
+            "close": 0.155,
+            "settle": 0.154,
+            "vol": 5000.0,
+            "amount": 7700000.0,
+            "oi": 20000.0,
+        })
+    df = pd.DataFrame(rows)
+    write_daily_partition(data_dir / "options", "opt_daily", trade_date, df)
+    return df
+
+
+def test_opt_basic_query_returns_data(tmp_path):
+    from datetime import date as dt
+    df = pd.DataFrame({
+        "ts_code": ["10004462.SH", "10004463.SH"],
+        "symbol": ["10004462", "10004463"],
+        "exchange": ["SSE", "SSE"],
+        "name": ["50ETF购4月2700", "50ETF沽4月2700"],
+        "per_unit": [10000.0, 10000.0],
+        "opt_code": ["OP510050", "OP510050"],
+        "opt_type": ["E", "E"],
+        "call_put": ["C", "P"],
+        "exercise_type": ["E", "E"],
+        "exercise_price": [2.7, 2.7],
+        "s_month": ["202404", "202404"],
+        "maturity_date": ["20240424", "20240424"],
+        "list_date": ["20240101", "20240101"],
+        "delist_date": ["20240424", "20240424"],
+    })
+    write_daily_partition(tmp_path / "options", "opt_basic", dt(2024, 1, 2), df)
+
+    api = LocalPro(tmp_path)
+    result = api.opt_basic()
+    assert len(result) == 2
+    assert set(result["ts_code"]) == {"10004462.SH", "10004463.SH"}
+
+
+def test_opt_basic_query_filters_by_call_put(tmp_path):
+    from datetime import date as dt
+    df = pd.DataFrame({
+        "ts_code": ["10004462.SH", "10004463.SH"],
+        "symbol": ["10004462", "10004463"],
+        "exchange": ["SSE", "SSE"],
+        "name": ["50ETF购4月2700", "50ETF沽4月2700"],
+        "per_unit": [10000.0, 10000.0],
+        "opt_code": ["OP510050", "OP510050"],
+        "opt_type": ["E", "E"],
+        "call_put": ["C", "P"],
+        "exercise_type": ["E", "E"],
+        "exercise_price": [2.7, 2.7],
+        "s_month": ["202404", "202404"],
+        "maturity_date": ["20240424", "20240424"],
+        "list_date": ["20240101", "20240101"],
+        "delist_date": ["20240424", "20240424"],
+    })
+    write_daily_partition(tmp_path / "options", "opt_basic", dt(2024, 1, 2), df)
+
+    api = LocalPro(tmp_path)
+    result = api.opt_basic(call_put="C")
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "10004462.SH"
+
+
+def test_opt_basic_query_raises_when_no_data(tmp_path):
+    api = LocalPro(tmp_path)
+    with pytest.raises(FileNotFoundError):
+        api.opt_basic()
+
+
+def test_opt_daily_query_returns_data(tmp_path):
+    from datetime import date as dt
+    _write_opt_daily_data(tmp_path, dt(2024, 1, 2))
+
+    api = LocalPro(tmp_path)
+    result = api.opt_daily(trade_date="20240102")
+    assert len(result) == 2
+
+
+def test_opt_daily_query_filters_by_ts_code(tmp_path):
+    from datetime import date as dt
+    _write_opt_daily_data(tmp_path, dt(2024, 1, 2))
+
+    api = LocalPro(tmp_path)
+    result = api.opt_daily(ts_code="10004462.SH", trade_date="20240102")
+    assert len(result) == 1
+    assert result.iloc[0]["ts_code"] == "10004462.SH"
+
+
+def test_opt_daily_query_raises_when_no_data(tmp_path):
+    api = LocalPro(tmp_path)
+    with pytest.raises(FileNotFoundError):
+        api.opt_daily(trade_date="20240102")
+
+
+def test_query_dispatch_supports_options(tmp_path):
+    from datetime import date as dt
+    _write_opt_daily_data(tmp_path, dt(2024, 1, 2))
+
+    api = LocalPro(tmp_path)
+    result = api.query("opt_daily", trade_date="20240102")
+    assert len(result) == 2

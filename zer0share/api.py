@@ -30,6 +30,8 @@ from zer0share.fetcher import (
     FUT_MONTHLY_COLS,
     FUT_INDEX_DAILY_COLS,
     FUT_WEEKLY_DETAIL_COLS,
+    OPT_BASIC_COLS,
+    OPT_DAILY_COLS,
 )
 
 
@@ -514,6 +516,72 @@ class LocalPro:
             data_dir_override=self._data_dir / "futures",
         )
 
+    def opt_basic(
+        self,
+        ts_code: str | None = None,
+        exchange: str | None = None,
+        opt_code: str | None = None,
+        call_put: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        table_dir = self._data_dir / "options" / "opt_basic"
+        if not table_dir.exists():
+            raise FileNotFoundError(
+                "opt_basic data not found; run `python main.py sync --table opt_basic` first"
+            )
+        selected = _parse_fields(fields, OPT_BASIC_COLS)
+        where = []
+        params = []
+        if ts_code is not None:
+            codes = [code.strip() for code in ts_code.split(",") if code.strip()]
+            placeholders = ", ".join("?" for _ in codes)
+            where.append(f"ts_code IN ({placeholders})")
+            params.extend(codes)
+        if exchange is not None:
+            where.append("exchange = ?")
+            params.append(exchange)
+        if opt_code is not None:
+            where.append("opt_code = ?")
+            params.append(opt_code)
+        if call_put is not None:
+            where.append("call_put = ?")
+            params.append(call_put)
+        pattern = table_dir / "date=*" / "data.parquet"
+        sql = (
+            f"SELECT {', '.join(selected)} "
+            "FROM read_parquet(?, hive_partitioning=true, union_by_name=true)"
+        )
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY ts_code"
+        df = duckdb.connect().execute(sql, [str(pattern), *params]).fetchdf()
+        return _format_date_columns(df, ["list_date", "delist_date", "maturity_date"])
+
+    def opt_daily(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        exchange: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        extra = {}
+        if exchange is not None:
+            extra["exchange"] = exchange
+        return self._query_daily_partitioned(
+            table_name="opt_daily",
+            sync_table="opt_daily",
+            columns=OPT_DAILY_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            extra_filters=extra or None,
+            data_dir_override=self._data_dir / "options",
+        )
+
     def fut_holding(
         self,
         trade_date: str | None = None,
@@ -829,6 +897,8 @@ class LocalPro:
             "fut_monthly": self.fut_monthly,
             "fut_index_daily": self.fut_index_daily,
             "fut_weekly_detail": self.fut_weekly_detail,
+            "opt_basic": self.opt_basic,
+            "opt_daily": self.opt_daily,
         }
         try:
             method = dispatch[api_name]

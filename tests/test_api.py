@@ -1157,3 +1157,108 @@ def test_query_dispatch_supports_futures(tmp_path):
 
     result = api.query("fut_daily", trade_date="20240102")
     assert len(result) == 2
+
+
+# --- Futures batch 2 API tests ---
+
+
+def test_ft_limit_query_returns_data(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    df = pd.DataFrame({
+        "trade_date": [dt(2024, 1, 2)],
+        "ts_code": ["CU2401.SHF"], "name": ["沪铜2401"],
+        "up_limit": [51000.0], "down_limit": [49000.0],
+        "m_ratio": [0.10], "cont": ["CU"], "exchange": ["SHFE"],
+    })
+    write_daily_partition(tmp_path / "futures", "ft_limit", dt(2024, 1, 2), df)
+
+    result = api.ft_limit(trade_date="20240102")
+    assert len(result) == 1
+
+
+def test_fut_weekly_query_returns_data(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    df = pd.DataFrame({
+        "ts_code": ["CU2401.SHF"], "trade_date": [dt(2024, 1, 2)],
+        "freq": ["week"], "open": [50000.0], "high": [50500.0],
+        "low": [49900.0], "close": [50300.0], "pre_close": [50000.0],
+        "settle": [50250.0], "pre_settle": [50100.0], "vol": [10000.0],
+        "amount": [251250.0], "oi": [50000.0], "oi_chg": [500.0],
+        "exchange": ["SHFE"], "change1": [200.0], "change2": [150.0],
+    })
+    write_daily_partition(tmp_path / "futures", "fut_weekly", dt(2024, 1, 2), df)
+
+    result = api.fut_weekly(trade_date="20240102")
+    assert len(result) == 1
+
+
+def test_fut_monthly_query_returns_data(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    df = pd.DataFrame({
+        "ts_code": ["CU2401.SHF"], "trade_date": [dt(2024, 1, 2)],
+        "freq": ["month"], "open": [50000.0], "high": [50500.0],
+        "low": [49900.0], "close": [50300.0], "pre_close": [50000.0],
+        "settle": [50250.0], "pre_settle": [50100.0], "vol": [10000.0],
+        "amount": [251250.0], "oi": [50000.0], "oi_chg": [500.0],
+        "exchange": ["SHFE"], "change1": [200.0], "change2": [150.0],
+    })
+    write_daily_partition(tmp_path / "futures", "fut_monthly", dt(2024, 1, 2), df)
+
+    result = api.fut_monthly(trade_date="20240102")
+    assert len(result) == 1
+
+
+def test_fut_index_daily_query_returns_data(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    df = pd.DataFrame({
+        "ts_code": ["NHAI.NH", "NHCI.NH"],
+        "trade_date": [dt(2024, 1, 2), dt(2024, 1, 2)],
+        "close": [1000.0, 800.0], "open": [998.0, 798.0],
+        "high": [1005.0, 805.0], "low": [995.0, 795.0],
+        "pre_close": [998.0, 798.0], "change": [2.0, 2.0],
+        "pct_chg": [0.2, 0.25], "vol": [50000.0, 30000.0],
+        "amount": [50000000.0, 24000000.0],
+    })
+    write_daily_partition(tmp_path / "futures", "fut_index_daily", dt(2024, 1, 2), df)
+
+    result = api.fut_index_daily(trade_date="20240102")
+    assert len(result) == 2
+
+
+def test_fut_weekly_detail_query_returns_data(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    df = pd.DataFrame({
+        "exchange": ["SHFE", "DCE"],
+        "prd": ["CU", "A"],
+        "name": ["沪铜", "豆一"],
+        "vol": [100000, 80000], "vol_yoy": [5.0, 3.0],
+        "amount": [250.0, 400.0], "amout_yoy": [3.0, 2.0],
+        "cumvol": [5000000, 4000000], "cumvol_yoy": [4.0, 3.0],
+        "cumamt": [12500.0, 20000.0], "cumamt_yoy": [2.0, 1.0],
+        "open_interest": [200000, 150000], "interest_wow": [1.0, -0.5],
+        "mc_close": [50300.0, 5000.0], "close_wow": [0.5, -0.3],
+        "week": ["202401", "202401"], "week_date": [dt(2024, 1, 1), dt(2024, 1, 1)],
+    })
+    write_daily_partition(tmp_path / "futures", "fut_weekly_detail", dt(2024, 1, 1), df)
+
+    result = api.fut_weekly_detail()
+    assert len(result) == 2
+
+
+def test_batch2_query_dispatch(tmp_path):
+    from datetime import date as dt
+    api = LocalPro(tmp_path)
+    df = pd.DataFrame({
+        "trade_date": [dt(2024, 1, 2)], "ts_code": ["CU2401.SHF"],
+        "name": ["沪铜2401"], "up_limit": [51000.0], "down_limit": [49000.0],
+        "m_ratio": [0.10], "cont": ["CU"], "exchange": ["SHFE"],
+    })
+    write_daily_partition(tmp_path / "futures", "ft_limit", dt(2024, 1, 2), df)
+
+    result = api.query("ft_limit", trade_date="20240102")
+    assert len(result) == 1

@@ -25,6 +25,11 @@ from zer0share.fetcher import (
     FUT_WSR_COLS,
     FUT_SETTLE_COLS,
     FUT_MAPPING_COLS,
+    FT_LIMIT_COLS,
+    FUT_WEEKLY_COLS,
+    FUT_MONTHLY_COLS,
+    FUT_INDEX_DAILY_COLS,
+    FUT_WEEKLY_DETAIL_COLS,
 )
 
 
@@ -611,6 +616,128 @@ class LocalPro:
             order_by="ts_code, trade_date",
         )
 
+    def ft_limit(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        exchange: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        extra = {}
+        if exchange is not None:
+            extra["exchange"] = exchange
+        return self._query_daily_partitioned(
+            table_name="ft_limit",
+            sync_table="ft_limit",
+            columns=FT_LIMIT_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            extra_filters=extra or None,
+            data_dir_override=self._data_dir / "futures",
+        )
+
+    def fut_weekly(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        exchange: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        extra = {}
+        if exchange is not None:
+            extra["exchange"] = exchange
+        return self._query_daily_partitioned(
+            table_name="fut_weekly",
+            sync_table="fut_weekly",
+            columns=FUT_WEEKLY_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            extra_filters=extra or None,
+            data_dir_override=self._data_dir / "futures",
+        )
+
+    def fut_monthly(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        exchange: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        extra = {}
+        if exchange is not None:
+            extra["exchange"] = exchange
+        return self._query_daily_partitioned(
+            table_name="fut_monthly",
+            sync_table="fut_monthly",
+            columns=FUT_MONTHLY_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            extra_filters=extra or None,
+            data_dir_override=self._data_dir / "futures",
+        )
+
+    def fut_index_daily(
+        self,
+        ts_code: str | None = None,
+        trade_date: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        return self._query_daily_partitioned(
+            table_name="fut_index_daily",
+            sync_table="fut_index_daily",
+            columns=FUT_INDEX_DAILY_COLS,
+            ts_code=ts_code,
+            trade_date=trade_date,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            data_dir_override=self._data_dir / "futures",
+        )
+
+    def fut_weekly_detail(
+        self,
+        exchange: str | None = None,
+        prd: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        fields: str | list[str] | None = None,
+    ) -> pd.DataFrame:
+        extra = {}
+        if exchange is not None:
+            extra["exchange"] = exchange
+        if prd is not None:
+            extra["prd"] = prd
+        return self._query_daily_partitioned(
+            table_name="fut_weekly_detail",
+            sync_table="fut_weekly_detail",
+            columns=FUT_WEEKLY_DETAIL_COLS,
+            ts_code=None,
+            trade_date=None,
+            start_date=start_date,
+            end_date=end_date,
+            fields=fields,
+            extra_filters=extra or None,
+            data_dir_override=self._data_dir / "futures",
+            order_by="date, exchange, prd",
+        )
+
     def pro_bar(
         self,
         ts_code: str,
@@ -697,6 +824,11 @@ class LocalPro:
             "fut_wsr": self.fut_wsr,
             "fut_settle": self.fut_settle,
             "fut_mapping": self.fut_mapping,
+            "ft_limit": self.ft_limit,
+            "fut_weekly": self.fut_weekly,
+            "fut_monthly": self.fut_monthly,
+            "fut_index_daily": self.fut_index_daily,
+            "fut_weekly_detail": self.fut_weekly_detail,
         }
         try:
             method = dispatch[api_name]

@@ -15,7 +15,7 @@ A-股数据本地化管道，基于 [Tushare Pro](https://tushare.pro) 拉取股
 
 ## 特性
 
-- **核心数据同步**：支持交易日历、股票基础信息、日线行情、复权因子、每日指标、ST、停复牌、涨跌停价格、指数成分、行业映射
+- **核心数据同步**：支持交易日历、股票基础信息、日线行情、复权因子、每日指标、ST、停复牌、涨跌停价格、指数成分、行业映射、期货与期权
 - **本地优先存储**：Parquet 分区文件 + DuckDB 元数据，无需数据库服务
 - **Tushare-like 查询**：本地 `pro_api()` 直接返回 DataFrame，不消耗 Tushare 积分
 - **复权行情**：本地 `pro_bar()` 支持不复权、前复权（qfq）和后复权（hfq）
@@ -26,7 +26,7 @@ A-股数据本地化管道，基于 [Tushare Pro](https://tushare.pro) 拉取股
 
 - Python 3.11+
 - [uv](https://github.com/astral-sh/uv)
-- Tushare Pro Token（基础行情需积分 ≥ 2000；`stock_st` 需积分 ≥ 3000；中信行业成分需积分 ≥ 5000；部分期货扩展数据需积分 ≥ 5000）
+- Tushare Pro Token（基础行情需积分 ≥ 2000；`stock_st` 需积分 ≥ 3000；中信行业成分、`opt_basic` 需积分 ≥ 5000；部分期货扩展数据需积分 ≥ 5000）
 
 ## 快速开始
 
@@ -81,6 +81,8 @@ uv run python main.py sync --table fut_weekly  # 期货周线行情
 uv run python main.py sync --table fut_monthly # 期货月线行情
 uv run python main.py sync --table fut_index_daily    # 期货指数日线行情
 uv run python main.py sync --table fut_weekly_detail  # 期货交易所周度明细
+uv run python main.py sync --table opt_basic          # 期权合约基础信息
+uv run python main.py sync --table opt_daily          # 期权日线行情
 ```
 
 首次验证建议先同步一个小区间，确认 Tushare 权限和字段可用后再全量回填：
@@ -93,6 +95,7 @@ uv run python main.py sync --table stk_limit --start-date 2024-01-01 --end-date 
 uv run python main.py sync --table index_weight --start-date 2024-01-01 --end-date 2024-01-31
 uv run python main.py sync --table fut_daily --start-date 2024-01-01 --end-date 2024-01-31
 uv run python main.py sync --table ft_limit --start-date 2024-01-01 --end-date 2024-01-31
+uv run python main.py sync --table opt_daily --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
 ### 4. 构建股票池
@@ -181,6 +184,11 @@ qfq = pro.pro_bar(
     end_date="20240331",
     adj="qfq",
 )
+
+# 期权数据
+opt_contracts = pro.opt_basic(exchange="SSE", call_put="C")           # 上交所认购期权合约列表
+opt_bar = pro.opt_daily(ts_code="10004462.SH", start_date="20240101", end_date="20240131")
+opt_snapshot = pro.opt_daily(trade_date="20240102", exchange="SSE")   # 某日全部上交所期权行情
 ```
 
 支持的本地查询方法：
@@ -201,6 +209,8 @@ qfq = pro.pro_bar(
 | `index_member_all` | 查询申万股票-行业映射（支持历史变更） |
 | `ci_index_member` | 查询中信股票-行业映射（支持历史变更） |
 | `pro_bar` | 查询本地 A 股日线行情，支持不复权、前复权（qfq）和后复权（hfq） |
+| `opt_basic` | 查询已同步的期权合约基础信息（支持按交易所、call_put、opt_code 过滤） |
+| `opt_daily` | 查询已同步的期权日线行情（支持按交易所过滤） |
 | `query` | 按接口名分发，例如 `pro.query("daily", ...)` |
 
 运行示例：
@@ -246,12 +256,19 @@ data/
 │   ├── sw_classify/data.parquet       # 申万行业分类树
 │   ├── sw_member/data.parquet         # 申万股票-行业映射（全量历史）
 │   └── ci_member/data.parquet         # 中信股票-行业映射（全量历史）
-└── universe/
-    ├── name=univ_research_base/date=20240131/data.parquet
-    ├── name=univ_trade_base/date=20240131/data.parquet
-    ├── name=univ_trade_hs300/date=20240131/data.parquet
-    ├── name=univ_trade_zz500/date=20240131/data.parquet
-    └── name=univ_trade_zz1000/date=20240131/data.parquet
+├── universe/
+│   ├── name=univ_research_base/date=20240131/data.parquet
+│   ├── name=univ_trade_base/date=20240131/data.parquet
+│   ├── name=univ_trade_hs300/date=20240131/data.parquet
+│   ├── name=univ_trade_zz500/date=20240131/data.parquet
+│   └── name=univ_trade_zz1000/date=20240131/data.parquet
+└── options/
+    ├── opt_basic/
+    │   └── date=20260602/data.parquet   # 全量，每次覆盖
+    └── opt_daily/
+        ├── date=20160104/data.parquet
+        ├── date=20160105/data.parquet
+        └── ...
 db/
 └── meta.duckdb                      # 同步记录 + 交易日历索引
 ```
@@ -283,6 +300,8 @@ db/
 | `sync --table fut_monthly` | 增量同步期货月线行情 |
 | `sync --table fut_index_daily` | 增量同步期货指数日线行情 |
 | `sync --table fut_weekly_detail` | 增量同步期货交易所周度明细 |
+| `sync --table opt_basic` | 同步期权合约基础信息（全量覆盖） |
+| `sync --table opt_daily` | 增量同步期权日线行情 |
 | `sync --all` | 按顺序同步全部 |
 | `build-universe` | 从 2016-01-01 到今天增量构建 5 个股票池 |
 | `build-universe --start-date YYYY-MM-DD --end-date YYYY-MM-DD` | 构建指定区间的 5 个股票池 |

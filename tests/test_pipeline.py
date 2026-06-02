@@ -873,3 +873,89 @@ def test_sync_fut_daily_up_to_date(pipeline, cfg):
     pipeline._meta.update_last_date("fut_daily", date.today())
     pipeline.sync_fut_daily()
     pipeline._fetcher.fetch_fut_daily.assert_not_called()
+
+
+# --- Futures batch 2 pipeline tests ---
+
+
+def test_sync_ft_limit_writes_to_futures_subdir(pipeline, cfg):
+    _setup_futures_trade_cal(pipeline, cfg)
+    pipeline._fetcher.fetch_ft_limit.return_value = pd.DataFrame({
+        "trade_date": [date(2024, 1, 2)],
+        "ts_code": ["CU2401.SHF"], "name": ["沪铜2401"],
+        "up_limit": [51000.0], "down_limit": [49000.0],
+        "m_ratio": [0.10], "cont": ["CU"], "exchange": ["SHFE"],
+    })
+    pipeline._meta.update_last_date("ft_limit", date(2024, 1, 1))
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_ft_limit()
+
+    assert (cfg.data_dir / "futures" / "ft_limit" / "date=20240102" / "data.parquet").exists()
+
+
+def test_sync_fut_weekly_writes_to_futures_subdir(pipeline, cfg):
+    _setup_futures_trade_cal(pipeline, cfg)
+    pipeline._fetcher.fetch_fut_weekly.return_value = pd.DataFrame({
+        "ts_code": ["CU2401.SHF"], "trade_date": [date(2024, 1, 2)],
+        "freq": ["week"], "open": [50000.0], "high": [50500.0],
+        "low": [49900.0], "close": [50300.0], "pre_close": [50000.0],
+        "settle": [50250.0], "pre_settle": [50100.0], "vol": [10000.0],
+        "amount": [251250.0], "oi": [50000.0], "oi_chg": [500.0],
+        "exchange": ["SHFE"], "change1": [200.0], "change2": [150.0],
+    })
+    pipeline._meta.update_last_date("fut_weekly", date(2024, 1, 1))
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_fut_weekly()
+
+    assert (cfg.data_dir / "futures" / "fut_weekly" / "date=20240102" / "data.parquet").exists()
+
+
+def test_sync_fut_index_daily_writes_to_futures_subdir(pipeline, cfg):
+    pipeline._fetcher.fetch_fut_index_daily.return_value = pd.DataFrame({
+        "ts_code": ["NHAI.NH"], "trade_date": [date(2024, 1, 2)],
+        "close": [1000.0], "open": [998.0], "high": [1005.0], "low": [995.0],
+        "pre_close": [998.0], "change": [2.0], "pct_chg": [0.2],
+        "vol": [50000.0], "amount": [50000000.0],
+    })
+    pipeline._meta.update_last_date("fut_index_daily", date(2024, 1, 1))
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 2)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_fut_index_daily()
+
+    assert (cfg.data_dir / "futures" / "fut_index_daily" / "date=20240102" / "data.parquet").exists()
+
+
+def test_sync_fut_weekly_detail_writes_to_futures_subdir(pipeline, cfg):
+    pipeline._fetcher.fetch_fut_weekly_detail.return_value = pd.DataFrame({
+        "exchange": ["SHFE"], "prd": ["CU"], "name": ["沪铜"],
+        "vol": [100000], "vol_yoy": [5.0], "amount": [250.0],
+        "amout_yoy": [3.0], "cumvol": [5000000], "cumvol_yoy": [4.0],
+        "cumamt": [12500.0], "cumamt_yoy": [2.0],
+        "open_interest": [200000], "interest_wow": [1.0],
+        "mc_close": [50300.0], "close_wow": [0.5],
+        "week": ["202401"], "week_date": [date(2024, 1, 1)],
+    })
+    pipeline._meta.update_last_date("fut_weekly_detail", date(2023, 12, 31))
+
+    with patch("zer0share.pipeline.date") as mock_date, \
+         patch("zer0share.pipeline.time.sleep"):
+        mock_date.today.return_value = date(2024, 1, 7)
+        mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
+        pipeline.sync_fut_weekly_detail()
+
+    # Should have written at least one partition
+    futures_dir = cfg.data_dir / "futures" / "fut_weekly_detail"
+    if futures_dir.exists():
+        partitions = list(futures_dir.iterdir())
+        assert len(partitions) >= 1

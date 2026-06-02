@@ -84,6 +84,25 @@ def _month_ranges(start: date, end: date) -> list[tuple[date, date]]:
     return ranges
 
 
+def _week_ranges(start: date, end: date) -> list[tuple[str, date]]:
+    """Generate (week_number, week_start_date) tuples for each ISO week in range.
+    Returns list of (week_str like '202401', monday_of_that_week)."""
+    weeks = []
+    seen = set()
+    current = start
+    while current <= end:
+        iso_year, iso_week, _ = current.isocalendar()
+        week_key = (iso_year, iso_week)
+        if week_key not in seen:
+            seen.add(week_key)
+            week_num = f"{iso_year}{iso_week:02d}"
+            # Monday of this ISO week
+            monday = current - timedelta(days=current.weekday())
+            weeks.append((week_num, monday))
+        current += timedelta(days=7)
+    return weeks
+
+
 def _index_weight_meta_key(index_code: str) -> str:
     return f"index_weight:{index_code}"
 
@@ -636,6 +655,166 @@ class Pipeline:
             end_date=end_date,
             data_dir=self._cfg.data_dir / "futures",
         )
+
+    def sync_ft_limit(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="ft_limit",
+            fetch=self._fetcher.fetch_ft_limit,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "futures",
+        )
+
+    def sync_fut_weekly(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="fut_weekly",
+            fetch=self._fetcher.fetch_fut_weekly,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "futures",
+        )
+
+    def sync_fut_monthly(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        self._sync_daily_partitioned(
+            table_name="fut_monthly",
+            fetch=self._fetcher.fetch_fut_monthly,
+            start_date=start_date,
+            end_date=end_date,
+            data_dir=self._cfg.data_dir / "futures",
+        )
+
+    def sync_fut_index_daily(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        today = date.today()
+        last = self._meta.get_last_date("fut_index_daily")
+
+        if start_date is None:
+            start = (last + timedelta(days=1)) if last else FIRST_DATE
+            end = today
+        else:
+            start = start_date
+            end = end_date or today
+
+        if start_date is None and start > end:
+            logger.info("fut_index_daily 已是最新，无需同步")
+            return
+        if start > end:
+            raise ValueError("start_date must be on or before end_date")
+
+        logger.info(f"fut_index_daily 同步开始: {start} ~ {end}")
+
+        all_frames = []
+        current = start
+        while current <= end:
+            try:
+                df = self._fetcher.fetch_fut_index_daily(current)
+                time.sleep(0.2)
+                if not df.empty:
+                    all_frames.append(df)
+            except Exception as e:
+                logger.error(f"fut_index_daily {current} 拉取失败: {e}")
+                self._notifier.send(f"fut_index_daily {current} 拉取失败: {e}")
+            current += timedelta(days=1)
+
+        if not all_frames:
+            msg = "fut_index_daily 无数据，跳过"
+            logger.info(msg)
+            self._notifier.send(msg)
+            return
+
+        combined = pd.concat(all_frames, ignore_index=True)
+        success = 0
+        skipped_existing = 0
+        frontier = last
+        futures_dir = self._cfg.data_dir / "futures"
+
+        for trade_date, part in combined.groupby("trade_date"):
+            if daily_partition_exists(futures_dir, "fut_index_daily", trade_date):
+                skipped_existing += 1
+                continue
+            write_daily_partition(futures_dir, "fut_index_daily", trade_date, part.reset_index(drop=True))
+            if frontier is None or trade_date > frontier:
+                self._meta.update_last_date("fut_index_daily", trade_date)
+                frontier = trade_date
+            success += 1
+
+        msg = (
+            f"fut_index_daily 同步完成: 成功 {success} 天, "
+            f"跳过已存在 {skipped_existing} 天"
+        )
+        logger.info(msg)
+        self._notifier.send(msg)
+
+    def sync_fut_weekly_detail(
+        self,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> None:
+        today = date.today()
+        last = self._meta.get_last_date("fut_weekly_detail")
+
+        if start_date is None:
+            start = (last + timedelta(days=1)) if last else FIRST_DATE
+            end = today
+        else:
+            start = start_date
+            end = end_date or today
+
+        if start > end:
+            raise ValueError("start_date must be on or before end_date")
+
+        futures_dir = self._cfg.data_dir / "futures"
+        success = 0
+        skipped_existing = 0
+        frontier = last
+
+        weeks = _week_ranges(start, end)
+        logger.info(
+            f"fut_weekly_detail 同步开始: {start} ~ {end}, 共 {len(weeks)} 个周"
+        )
+
+        for week_num, week_start in weeks:
+            try:
+                df = self._fetcher.fetch_fut_weekly_detail(week_num)
+                time.sleep(0.2)
+                if df.empty:
+                    continue
+                # Use week_start as partition date
+                if daily_partition_exists(futures_dir, "fut_weekly_detail", week_start):
+                    skipped_existing += 1
+                    continue
+                write_daily_partition(futures_dir, "fut_weekly_detail", week_start, df)
+                if frontier is None or week_start > frontier:
+                    self._meta.update_last_date("fut_weekly_detail", week_start)
+                    frontier = week_start
+                success += 1
+            except Exception as e:
+                logger.error(f"fut_weekly_detail {week_num} 同步失败: {e}")
+                self._notifier.send(f"fut_weekly_detail {week_num} 同步失败: {e}")
+                raise
+
+        msg = (
+            f"fut_weekly_detail 同步完成: 成功 {success} 周, "
+            f"跳过已存在 {skipped_existing} 周, "
+            f"共 {len(weeks)} 周"
+        )
+        logger.info(msg)
+        self._notifier.send(msg)
 
     def _sync_daily_partitioned(
         self,

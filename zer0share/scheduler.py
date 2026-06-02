@@ -56,13 +56,21 @@ def start_scheduler(config_path: str = "config/settings.toml") -> None:
             ("fut_wsr", pipeline.sync_fut_wsr, 30),
             ("fut_settle", pipeline.sync_fut_settle, 40),
             ("fut_mapping", pipeline.sync_fut_mapping, 50),
+            ("ft_limit", pipeline.sync_ft_limit, 60),
+            ("fut_weekly", pipeline.sync_fut_weekly, 70),
+            ("fut_monthly", pipeline.sync_fut_monthly, 80),
+            ("fut_index_daily", pipeline.sync_fut_index_daily, 90),
+            ("fut_weekly_detail", pipeline.sync_fut_weekly_detail, 100),
         ]
         for job_id, func, offset in futures_tables:
+            total_min = cfg.scheduler_futures_start_minute + offset
+            job_hour = cfg.scheduler_futures_hour + total_min // 60
+            job_minute = total_min % 60
             scheduler.add_job(
                 func,
                 CronTrigger(
-                    hour=cfg.scheduler_futures_hour,
-                    minute=cfg.scheduler_futures_start_minute + offset,
+                    hour=job_hour,
+                    minute=job_minute,
                 ),
                 id=job_id,
             )

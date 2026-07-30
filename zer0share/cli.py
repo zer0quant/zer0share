@@ -30,11 +30,11 @@ def _parse_date(s: str):
     return dt.datetime.strptime(s, "%Y%m%d").date()
 
 
-def _make_pipeline(config_path: str = "config/settings.toml") -> Pipeline:
+def _make_pipeline(config_path: str = "config/settings.toml", ticker_mode: bool = False) -> Pipeline:
     cfg = load_config(Path(config_path))
     init_logger(cfg.log_path)
     sources = DataSources(
-        tushare=TushareFetcher(cfg.tushare_token),
+        tushare=TushareFetcher(cfg.tushare_token, proxy_url=cfg.tushare_proxy_url),
         ricequant=(
             RiceQuantFetcher(
                 username=cfg.ricequant.username,
@@ -46,7 +46,7 @@ def _make_pipeline(config_path: str = "config/settings.toml") -> Pipeline:
         ),
     )
     notifier = build_notifier(cfg.notifier)
-    return Pipeline(cfg, sources, notifier)
+    return Pipeline(cfg, sources, notifier, ticker_mode=ticker_mode)
 
 
 @click.group()
@@ -129,6 +129,7 @@ SYNC_TABLES = [
 @click.option("--ricequant", "sync_ricequant", is_flag=True, default=False)
 @click.option("--start-date", default=None, callback=_validate_date)
 @click.option("--end-date", default=None, callback=_validate_date)
+@click.option("--ticker-mode", is_flag=True, default=False, help="Per-ticker sync mode (for relay/proxy API)")
 def sync(
     table: str | None,
     sync_all: bool,
@@ -139,6 +140,7 @@ def sync(
     sync_ricequant: bool,
     start_date: str | None,
     end_date: str | None,
+    ticker_mode: bool,
 ) -> None:
     """同步数据。"""
     if end_date is not None and start_date is None:
@@ -146,7 +148,7 @@ def sync(
     if start_date is not None and end_date is not None and end_date < start_date:
         raise click.UsageError("--end-date must be on or after --start-date")
 
-    with _make_pipeline() as pipeline:
+    with _make_pipeline(ticker_mode=ticker_mode) as pipeline:
         if table is not None and (start_date is not None or end_date is not None):
             job = pipeline.registry.get(table)
             if job is not None and not job.supports_date_range:

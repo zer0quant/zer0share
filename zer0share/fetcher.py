@@ -2,6 +2,7 @@ import tushare as ts
 import pandas as pd
 import requests
 import time
+from functools import partial
 from loguru import logger
 
 import zer0share.dateutil as dateutil
@@ -87,11 +88,75 @@ FUT_INDEX_CODES = ["NHCI.NH", "NHAI.NH", "NHMI.NH"]
 OPTIONS_EXCHANGES = ["SSE", "SZSE", "CFFEX", "DCE", "SHFE", "CZCE"]
 
 
+
+class _ProxiedDataApi:
+    """Tushare DataApi-compatible client routing through relay with X-API-Key auth.
+    
+    Used when the API endpoint requires X-API-Key header instead of body token,
+    and/or only supports per-ticker queries.
+    """
+
+    def __init__(self, token: str, proxy_url: str):
+        self._session = requests.Session()
+        self._session.headers.update({
+            "X-API-Key": token,
+            "Content-Type": "application/json",
+        })
+        self._session.trust_env = False
+        self._session.proxies = {"http": "", "https": ""}
+        self._proxy_url = proxy_url.rstrip("/")
+        self._timeout = 120
+
+    def query(self, api_name: str, fields: str = "", **kwargs):
+        req_params = {
+            "api_name": api_name,
+            "params": kwargs,
+            "fields": fields,
+        }
+        res = self._session.post(
+            self._proxy_url,
+            json=req_params,
+            timeout=self._timeout,
+        )
+        if not res:
+            return pd.DataFrame()
+        result = res.json()
+        if result.get("code") != 0:
+            raise Exception(result.get("msg", "unknown error"))
+        data = result.get("data", {})
+        columns = data.get("fields", [])
+        items = data.get("items", [])
+        if items:
+            return pd.DataFrame(items, columns=columns)
+        return pd.DataFrame(columns=columns)
+
+    def __getattr__(self, name):
+        return partial(self.query, name)
+
+
+# Proxy URL patterns: when it ends with /tushare/pro, the relay uses
+# X-API-Key auth and needs the _ProxiedDataApi custom session.
+_RELAY_PROXY_SUFFIXES = ("/tushare/pro",)
+
+
+def _is_relay_proxy(url: str | None) -> bool:
+    """Returns True if the proxy URL is a header-based relay (not tushare SDK compatible)."""
+    if not url:
+        return False
+    return any(url.rstrip("/").endswith(suffix) for suffix in _RELAY_PROXY_SUFFIXES)
+
+
 class TushareFetcher:
     SW_VERSIONS = ("SW2014", "SW2021")
 
-    def __init__(self, token: str):
-        self._pro = ts.pro_api(token)
+    def __init__(self, token: str, proxy_url: str | None = None):
+        if proxy_url and _is_relay_proxy(proxy_url):
+            self._pro = _ProxiedDataApi(token, proxy_url)
+        elif proxy_url:
+            self._pro = ts.pro_api(token)
+            self._pro._DataApi__http_url = proxy_url.rstrip("/")
+        else:
+            self._pro = ts.pro_api(token)
 
     def fetch_basic(self) -> pd.DataFrame:
         logger.info("拉取 stock_basic")
@@ -229,6 +294,22 @@ class TushareFetcher:
         logger.debug(f"拉取ETF基金日线: {trade_date}")
         df = self._pro.fund_daily(trade_date=trade_date, fields=",".join(FUND_DAILY_COLS))
         return _select_columns_or_empty(df, FUND_DAILY_COLS)
+
+    def fetch_fund_daily_range(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
+        """Per-ticker fund_daily with date range (for relay/proxy mode)."""
+        logger.debug(f"拉取ETF基金日线(按ETF): {ts_code} {start_date}~{end_date}")
+        df = self._pro.fund_daily(
+            ts_code=ts_code, start_date=start_date, end_date=end_date,
+            fields=",".join(FUND_DAILY_COLS),
+        )
+        return _select_columns_or_empty(df, FUND_DAILY_COLS)
+
+    def get_etf_codes(self) -> list[str]:
+        """Get sorted list of active ETF codes from etf_basic."""
+        df = self._pro.etf_basic()
+        if df is None or df.empty or "ts_code" not in df.columns:
+            return []
+        return sorted(df["ts_code"].dropna().unique().tolist())
 
     def fetch_fund_adj(self, trade_date: str) -> pd.DataFrame:
         logger.debug(f"拉取ETF基金复权因子: {trade_date}")

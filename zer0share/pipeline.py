@@ -8,18 +8,20 @@ from zer0share.trading_calendar import TradingCalendar
 
 
 class Pipeline:
-    def __init__(self, cfg: Config, sources: DataSources, notifier: Notifier):
+    def __init__(self, cfg: Config, sources: DataSources, notifier: Notifier, ticker_mode: bool = False):
         meta = MetaStore(cfg.db_path)
         calendar = TradingCalendar(meta)
         self._runtime = SyncRuntime(calendar=calendar, notifier=notifier, meta=meta)
         self._registry: dict[str, SyncJob] = {}
-        self._build_registry(cfg, sources)
+        self._build_registry(cfg, sources, ticker_mode=ticker_mode)
 
-    def _build_registry(self, cfg: Config, sources: DataSources) -> None:
+    def _build_registry(self, cfg: Config, sources: DataSources, ticker_mode: bool = False) -> None:
         from zer0share.sync import calendar, stock, index, industry, futures, options, ricequant, etf
-        for module in [calendar, stock, index, industry, futures, options, etf]:
+        for module in [calendar, stock, index, industry, futures, options]:
             for job in module.build_jobs(cfg, sources.tushare):
                 self._registry[job.table_name] = job
+        for job in etf.build_jobs(cfg, sources.tushare, ticker_mode=ticker_mode):
+            self._registry[job.table_name] = job
         for job in ricequant.build_jobs(cfg, sources):
             self._registry[job.table_name] = job
 

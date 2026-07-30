@@ -61,6 +61,7 @@ class QualityConfig:
 @dataclass(frozen=True)
 class Config:
     tushare_token: str
+    tushare_proxy_url: str | None
     data_dir: Path
     db_path: Path
     log_path: Path
@@ -179,8 +180,10 @@ def load_config(path: Path = Path("config/settings.toml")) -> Config:
     try:
         notifier = _parse_notifier(raw)
         wecom_webhook_url, notifier_enabled = _parse_wecom_notifier(raw["notifier"])
+        tushare_proxy_url = str(raw["tushare"].get("proxy_url", "")) or None
         return Config(
             tushare_token=raw["tushare"]["token"],
+            tushare_proxy_url=tushare_proxy_url,
             data_dir=Path(raw["paths"]["data_dir"]),
             db_path=Path(raw["paths"]["db_path"]),
             log_path=Path(raw["paths"]["log_path"]),

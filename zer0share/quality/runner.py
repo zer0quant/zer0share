@@ -15,8 +15,10 @@ from zer0share.quality.models import (
 from zer0share.quality.rules import (
     check_adjustment_factor_values,
     check_adjustment_factor_jumps,
+    check_coverage,
     check_duplicate_key,
     check_market_data_values,
+    WELL_KNOWN_ETF_CODES,
     check_required_columns,
 )
 from zer0share.quality.targets import QualityTarget, get_targets
@@ -82,6 +84,21 @@ class QualityRunner:
         rows = 0
         partitions = 0
         adjusted_return_state: AdjustedReturnState = {}
+
+        # load basic reference table for coverage checks (once per target)
+        self._basic_df: pd.DataFrame | None = None
+        if target.table == "fund_daily":
+            basic_path = self.data_dir / "etf" / "etf_basic" / "data.parquet"
+        elif target.table == "daily_kline":
+            basic_path = self.data_dir / "stock" / "basic" / "data.parquet"
+        else:
+            basic_path = None
+
+        if basic_path is not None and basic_path.exists():
+            try:
+                self._basic_df = pd.read_parquet(basic_path)
+            except Exception:
+                self._basic_df = None
 
         for date_value in expected_dates:
             parquet_path = target_dir / f"date={date_value}" / "data.parquet"
@@ -208,6 +225,36 @@ class QualityRunner:
         )
         return sorted(set(cal_dates[mask].tolist()))
 
+    def _expected_codes_for_date(self, target: QualityTarget, date_value: str) -> set[str]:
+        """Return the set of ts_code expected to exist for this target on date_value."""
+        if self._basic_df is None:
+            return set()
+
+        df = self._basic_df
+        if "ts_code" not in df.columns or "list_date" not in df.columns:
+            return set()
+
+        if target.table == "fund_daily":
+            mask = pd.Series(True, index=df.index)
+            if "list_status" in df.columns:
+                mask = mask & (df["list_status"] != "D")
+            mask = mask & df["list_date"].notna()
+            mask = mask & (df["list_date"].astype(str).str.strip() <= date_value)
+        elif target.table == "daily_kline":
+            mask = pd.Series(True, index=df.index)
+            if "list_status" in df.columns:
+                mask = mask & (df["list_status"] == "L")
+            mask = mask & df["list_date"].notna()
+            mask = mask & (df["list_date"].astype(str).str.strip() <= date_value)
+            if "delist_date" in df.columns:
+                delist_na = df["delist_date"].isna() | (df["delist_date"].astype(str).str.strip() == "")
+                delist_future = df["delist_date"].astype(str).str.strip() > date_value
+                mask = mask & (delist_na | delist_future)
+        else:
+            return set()
+
+        return set(df.loc[mask, "ts_code"].dropna().astype(str))
+
     def _check_frame(
         self,
         target: QualityTarget,
@@ -219,6 +266,15 @@ class QualityRunner:
         findings.extend(check_duplicate_key(target.table, date_value, df, target.primary_key))
         if target.kind == "market_data":
             findings.extend(check_market_data_values(target.table, date_value, df))
+            findings.extend(
+                check_coverage(
+                    target.table,
+                    date_value,
+                    df,
+                    self._expected_codes_for_date(target, date_value),
+                    WELL_KNOWN_ETF_CODES if target.table == "fund_daily" else None,
+                )
+            )
         elif target.kind == "adjustment":
             findings.extend(check_adjustment_factor_values(target.table, date_value, df))
             findings.extend(check_adjustment_factor_jumps(target.table, df))

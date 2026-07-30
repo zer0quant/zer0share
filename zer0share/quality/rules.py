@@ -182,6 +182,69 @@ def check_adjustment_factor_values(
     ]
 
 
+# well-known ETF codes that should always trigger a warning if missing
+WELL_KNOWN_ETF_CODES: set[str] = {
+    "510300.SH", "510050.SH", "159915.SZ", "510500.SH",
+    "159919.SZ", "588000.SH", "510880.SH",
+}
+
+
+def check_coverage(
+    table: str,
+    date: str | None,
+    df: pd.DataFrame,
+    expected_codes: set[str],
+    well_known_codes: set[str] | None = None,
+) -> list[QualityFinding]:
+    """Check that all expected codes are present in the partition data."""
+    if not expected_codes:
+        return []
+
+    if "ts_code" not in df.columns:
+        return [
+            QualityFinding(
+                table=table,
+                date=date,
+                severity=Severity.FAIL,
+                rule="coverage",
+                count=len(expected_codes),
+                message="ts_code column is missing, coverage check skipped",
+                sample=[],
+            )
+        ]
+
+    actual_codes = set(df["ts_code"].dropna().astype(str))
+    missing = expected_codes - actual_codes
+    if not missing:
+        return []
+
+    coverage = len(actual_codes & expected_codes) / len(expected_codes)
+    wkc = well_known_codes if well_known_codes is not None else set()
+
+    if coverage < 0.8:
+        severity = Severity.FAIL
+    elif coverage < 0.95:
+        severity = Severity.WARN
+    elif missing & wkc:
+        severity = Severity.WARN
+    else:
+        return []
+
+    missing_list = sorted(missing)[:20]
+
+    return [
+        QualityFinding(
+            table=table,
+            date=date,
+            severity=severity,
+            rule="coverage",
+            count=len(missing),
+            message=f"coverage is {coverage:.1%}, missing {len(missing)} codes",
+            sample=[{"missing_codes": missing_list, "coverage": f"{coverage:.1%}"}],
+        )
+    ]
+
+
 def check_adjustment_factor_jumps(
     table: str,
     df: pd.DataFrame,

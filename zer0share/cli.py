@@ -34,7 +34,7 @@ def _make_pipeline(config_path: str = "config/settings.toml") -> Pipeline:
     cfg = load_config(Path(config_path))
     init_logger(cfg.log_path)
     sources = DataSources(
-        tushare=TushareFetcher(cfg.tushare_token),
+        tushare=TushareFetcher(cfg.tushare_token, cfg.tushare_http_url),
         ricequant=(
             RiceQuantFetcher(
                 username=cfg.ricequant.username,

@@ -57,8 +57,10 @@ def compute_adj_factor(df: pd.DataFrame) -> pd.DataFrame:
     return result[["ts_code", "trade_date", "close", "pre_close", "adj_factor_calc"]]
 
 
-def fetch_tushare_adj(token: str, ts_code: str, start: str, end: str) -> pd.DataFrame:
+def fetch_tushare_adj(token: str, ts_code: str, start: str, end: str, http_url: str = "") -> pd.DataFrame:
     pro = ts.pro_api(token)
+    if http_url:
+        pro._DataApi__http_url = http_url
     df = pro.adj_factor(ts_code=ts_code, start_date=start, end_date=end)
     if df is None or df.empty:
         raise RuntimeError("Tushare adj_factor 未返回数据，请检查 token 积分或日期范围")
@@ -135,7 +137,7 @@ def main() -> None:
     calc_df = compute_adj_factor(kline)
 
     print(f"\n>>> 拉取 Tushare adj_factor ...")
-    tushare_df = fetch_tushare_adj(cfg.tushare_token, args.ts_code, args.start, args.end)
+    tushare_df = fetch_tushare_adj(cfg.tushare_token, args.ts_code, args.start, args.end, cfg.tushare_http_url)
     print(f"    Tushare 返回 {len(tushare_df)} 条")
 
     result = compare(calc_df, tushare_df)

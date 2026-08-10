@@ -1,3 +1,7 @@
+[tool.uv]
+# 或者使用 index-url 字段
+index-url = "https://mirrors.aliyun.com/pypi/simple/"
+
 [project]
 name = "zer0share"
 version = "0.1.0"

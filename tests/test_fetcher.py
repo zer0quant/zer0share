@@ -156,6 +156,18 @@ def mock_pro():
         yield mock.return_value
 
 
+def test_fetcher_sets_http_url_when_provided(mock_pro):
+    TushareFetcher("fake_token", "https://ts.gyzcloud.top/api")
+
+    assert mock_pro._DataApi__http_url == "https://ts.gyzcloud.top/api"
+
+
+def test_fetcher_does_not_set_http_url_when_empty(mock_pro):
+    TushareFetcher("fake_token")
+
+    assert "_DataApi__http_url" not in mock_pro.__dict__
+
+
 def test_fetch_basic_returns_all_documented_columns(mock_pro):
     mock_pro.stock_basic.return_value = pd.DataFrame([_basic_row()])
     fetcher = TushareFetcher("fake_token")

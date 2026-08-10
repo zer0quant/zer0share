@@ -47,6 +47,30 @@ def test_load_config_returns_schedule_dict(tmp_path):
     assert cfg.notifier.feishu.enabled is False
 
 
+def test_load_config_defaults_tushare_http_url_empty(tmp_path):
+    cfg_file = tmp_path / "settings.toml"
+    cfg_file.write_text(VALID_TOML, encoding="utf-8")
+
+    cfg = load_config(cfg_file)
+
+    assert cfg.tushare_http_url == ""
+
+
+def test_load_config_parses_tushare_http_url(tmp_path):
+    cfg_file = tmp_path / "settings.toml"
+    cfg_file.write_text(
+        VALID_TOML.replace(
+            'token = "test_token"',
+            'token = "test_token"\nhttp_url = "https://ts.gyzcloud.top/api"',
+        ),
+        encoding="utf-8",
+    )
+
+    cfg = load_config(cfg_file)
+
+    assert cfg.tushare_http_url == "https://ts.gyzcloud.top/api"
+
+
 def test_load_config_notifier_enabled_true(tmp_path):
     cfg_file = tmp_path / "settings.toml"
     cfg_file.write_text(

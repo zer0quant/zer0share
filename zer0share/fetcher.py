@@ -90,8 +90,10 @@ OPTIONS_EXCHANGES = ["SSE", "SZSE", "CFFEX", "DCE", "SHFE", "CZCE"]
 class TushareFetcher:
     SW_VERSIONS = ("SW2014", "SW2021")
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, http_url: str = ""):
         self._pro = ts.pro_api(token)
+        if http_url:
+            self._pro._DataApi__http_url = http_url
 
     def fetch_basic(self) -> pd.DataFrame:
         logger.info("拉取 stock_basic")

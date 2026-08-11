@@ -57,6 +57,7 @@ cp config/settings.example.toml config/settings.toml
 ```toml
 [tushare]
 token = "your_tushare_token_here"
+# http_url = ""  # 可选，Tushare 代理接口地址（留空使用官方接口）
 
 [paths]
 data_dir = "data"          # Parquet 存储目录

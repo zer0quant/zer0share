@@ -90,8 +90,10 @@ OPTIONS_EXCHANGES = ["SSE", "SZSE", "CFFEX", "DCE", "SHFE", "CZCE"]
 class TushareFetcher:
     SW_VERSIONS = ("SW2014", "SW2021")
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, http_url: str = ""):
         self._pro = ts.pro_api(token)
+        if http_url:
+            self._pro._DataApi__http_url = http_url
 
     def fetch_basic(self) -> pd.DataFrame:
         logger.info("拉取 stock_basic")
@@ -495,4 +497,7 @@ class TushareFetcher:
 def _select_columns_or_empty(df: pd.DataFrame | None, columns: list[str]) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame(columns=columns)
+    missing = [c for c in columns if c not in df.columns]
+    if missing:
+        df[missing] = pd.NA  # ponytail: Tushare may omit columns added after early dates (e.g. limit_status)
     return df[columns]

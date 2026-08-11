@@ -59,7 +59,7 @@ def start_scheduler(config_path: str = "config/settings.toml") -> None:
     init_logger(cfg.log_path)
 
     sources = DataSources(
-        tushare=TushareFetcher(cfg.tushare_token),
+        tushare=TushareFetcher(cfg.tushare_token, cfg.tushare_http_url),
         ricequant=(
             RiceQuantFetcher(
                 username=cfg.ricequant.username,

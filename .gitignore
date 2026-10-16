@@ -32,3 +32,4 @@ uv.lock
 
 # Claude local config
 .claude/
+scripts/

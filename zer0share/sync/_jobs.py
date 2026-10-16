@@ -326,6 +326,121 @@ class CalendarDateSyncJob(SyncJob):
         )
 
 
+class TickerSyncJob(SyncJob):
+    """Sync a daily-partitioned table by iterating over tickers (ETF codes).
+
+    Used when the API only supports per-ticker date-range queries
+    (relay/proxy mode) rather than per-date bulk queries.
+    """
+
+    def __init__(
+        self,
+        table_name: str,
+        spec: DailyTableSpec,
+        fetch_range: Callable[[str, str, str], pd.DataFrame],
+        store: DailyPartitionStore,
+        get_tickers: Callable[[], list[str]],
+        ticker_sleep: float = 0.35,
+        supports_date_range: bool = True,
+    ):
+        self.table_name = table_name
+        self.spec = spec
+        self.fetch_range = fetch_range
+        self.store = store
+        self.get_tickers = get_tickers
+        self.ticker_sleep = ticker_sleep
+        self.supports_date_range = supports_date_range
+
+    def run(
+        self,
+        rt: SyncRuntime,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> None:
+        today = rt.calendar.today()
+        if start_date is None:
+            last = rt.meta.get_last_date(self.spec.name)
+            start = dateutil.add_days(last, 1) if last is not None else self.spec.first_date
+            end = today
+            if start > end:
+                logger.info(f"{self.spec.name}: 已是最新 (last={last})")
+                return
+        else:
+            start = start_date
+            end = end_date if end_date is not None else today
+            if start > end:
+                raise ValueError(f"start_date {start} is after end_date {end}")
+
+        trading_days = rt.calendar.get_trading_days("SSE", start, end)
+        if not trading_days:
+            return
+
+        logger.info(
+            f"{self.spec.name} (ticker mode): start {start} ~ {end}, "
+            f"trading_days={len(trading_days)}"
+        )
+
+        tickers = self.get_tickers()
+        logger.info(f"{self.spec.name}: {len(tickers)} tickers to fetch")
+
+        all_frames: list[pd.DataFrame] = []
+        ticker_ok = ticker_empty = 0
+        started_at = time.monotonic()
+
+        for i, tc in enumerate(tickers):
+            try:
+                df = self.fetch_range(tc, start, end)
+                if df is not None and not df.empty:
+                    all_frames.append(df)
+                    ticker_ok += 1
+                else:
+                    ticker_empty += 1
+            except Exception as exc:
+                logger.warning(f"{self.spec.name}: {tc} fetch failed: {exc}")
+                ticker_empty += 1
+
+            if self.ticker_sleep > 0:
+                time.sleep(self.ticker_sleep)
+
+            if (i + 1) % min(100, max(1, len(tickers) // 10)) == 0:
+                rows = sum(len(f) for f in all_frames)
+                elapsed = time.monotonic() - started_at
+                logger.info(
+                    f"{self.spec.name}: ticker progress {i+1}/{len(tickers)} "
+                    f"ok={ticker_ok} empty={ticker_empty} rows={rows} "
+                    f"elapsed={_format_duration(elapsed)}"
+                )
+
+        elapsed = time.monotonic() - started_at
+        if not all_frames:
+            logger.info(f"{self.spec.name}: no data fetched, elapsed={_format_duration(elapsed)}")
+            rt.notifier.send(f"{self.spec.name} 同步完成 (ticker mode)\n无数据")
+            return
+
+        combined = pd.concat(all_frames, ignore_index=True)
+        if "trade_date" in combined.columns:
+            combined["_date"] = combined["trade_date"].astype(str).str.replace("-", "")
+            combined = combined.drop_duplicates(subset=["ts_code", "trade_date"])
+
+            written = 0
+            for date_val, grp in combined.groupby("_date", sort=True):
+                grp = grp.drop(columns=["_date"], errors="ignore")
+                self.store.write(date_val, grp)
+                written += 1
+
+            logger.info(
+                f"{self.spec.name}: done total={len(tickers)} tickers, "
+                f"written={written} partitions, {len(combined)} rows, "
+                f"elapsed={_format_duration(elapsed)}"
+            )
+            rt.notifier.send(
+                f"{self.spec.name} 同步完成 (ticker mode)\n"
+                f"区间：{start} ~ {end}｜写入 {written} 天 / {len(combined)} 条"
+            )
+        else:
+            logger.error(f"{self.spec.name}: no trade_date column in fetched data")
+
+
 class SnapshotSyncJob(SyncJob):
     def __init__(
         self,

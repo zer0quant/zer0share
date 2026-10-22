@@ -19,7 +19,11 @@ BASIC_COLS = [
 ]
 DAILY_COLS = [
     "ts_code", "trade_date", "open", "high", "low",
-    "close", "pre_close", "change", "pct_chg", "vol", "amount"
+    "close", "pre_close", "change", "pct_chg", "vol", "amount",
+    # ah_vol/ah_amount 仅 A+H 交叉股有值, tushare daily 偶有返回;
+    # 历史 8728 个分区均不含这两列, 故不在 spec.columns 中声明 —
+    # 否则 query 层按 spec.columns 拼 SELECT 会 Binder Error。
+    # 若接口开始返回, _align_partition_schema 会扩展分区 schema 后再写入。
 ]
 TRADE_CAL_COLS = ["exchange", "cal_date", "is_open", "pretrade_date"]
 ADJ_FACTOR_COLS = ["ts_code", "trade_date", "adj_factor"]
@@ -47,6 +51,28 @@ DAILY_BASIC_COLS = [
 STOCK_ST_COLS = ["ts_code", "name", "trade_date", "type", "type_name"]
 SUSPEND_D_COLS = ["ts_code", "trade_date", "suspend_timing", "suspend_type"]
 STK_LIMIT_COLS = ["trade_date", "ts_code", "pre_close", "up_limit", "down_limit"]
+
+# 限售股解禁 (share_float) — 按解禁日期查, 非按交易日
+# 列名以 tushare 接口实际返回为准 (float_ratio/holder_name/share_type),
+# 早前声明的 float_type/hold_share/rate 并不存在, 会导致查询 Binder Error
+SHARE_FLOAT_COLS = [
+    "ts_code", "ann_date", "float_date", "float_share",
+    "float_ratio", "holder_name", "share_type",
+]
+
+# 大宗交易 (block_trade) — 按交易日查
+# name/type/adj_price 接口未返回 (实测仅 7 列), 已从声明中移除
+BLOCK_TRADE_COLS = [
+    "ts_code", "trade_date", "price", "vol", "amount", "buyer", "seller",
+]
+
+# 融资融券 (margin) — 按交易日查
+MARGIN_COLS = [
+    "trade_date", "exchange_id", "name",
+    "rzye", "rzmre", "rzche", "rqye", "rqmcl", "rqyl", "rzrqye",
+]
+
+# 股东增减持 (stk_holdertrade) — 来自上游 PR #1
 STK_HOLDERTRADE_COLS = [
     "ts_code", "ann_date", "holder_name", "holder_type", "in_de",
     "change_vol", "change_ratio", "after_share", "after_ratio", "avg_price", "total_share",

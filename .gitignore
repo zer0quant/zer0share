@@ -8,6 +8,10 @@ dist/
 # Config with real secrets
 config/settings.toml
 
+# Downloader run logs & pre-edit backups
+*.log
+*.bak-*
+
 # Data directories
 data/
 db/

@@ -18,17 +18,71 @@
 
 ## 首次同步
 
-一键同步全部，或按专题分组同步：
+一键同步全部，或按业务域分组同步：
 
 ```bash
-uv run python main.py sync --all      # 全部
-uv run python main.py sync --stock    # 股票核心 + 指数 + 行业
-uv run python main.py sync --etf      # ETF 专题
-uv run python main.py sync --futures  # 期货
-uv run python main.py sync --options  # 期权
+uv run python main.py sync --all             # 全部 63 张
+uv run python main.py sync --topic quote     # 行情 10 张
+uv run python main.py sync --topic finance   # 财务 12 张
+uv run python main.py sync --topic futures   # 期货 11 张
+uv run python main.py sync --topic fund      # 基金与 ETF 8 张
 ```
 
-也可以逐表执行（顺序不可颠倒）。首次同步日线等历史数据量较大，受 Tushare 每分钟调用频次限制影响，全量回填可能需要数小时。
+`--topic` 接受的分组共 12 个：`basic`、`quote`、`fundflow`、`toplist`、
+`finance`、`index`、`bond`、`fund`、`macro`、`futures`、`options`、`etf`
+（`etf` 与 `fund` 表清单相同，是 `--etf` 旧开关的等价物）。
+旧版专题开关 `--stock/--etf/--futures/--options` 保留原表清单语义。
+
+也可以逐表执行（顺序不可颠倒）。首次同步日线等历史数据量较大，受 Tushare
+每分钟调用频次限制影响，全量回填可能需要数小时。建议先用 `--dry-run`
+确认路由正确再正式跑。
+
+### 统一 `sync` 命令
+
+`sync` 是唯一公开入口。**所有 63 张表都是同一种 `SyncJob`**，共用同一套
+run / 游标 / 重试 / 通知 / 日期区间语义，写同一套 catalog 规范布局
+（时序表 `date=YYYYMMDD/data.parquet`，静态表 `data.parquet`，
+`index_weight` 两级分区 `index_code=*/date=*/`）。
+
+表之间只在**取数方式**上分两类，由 job 自身决定，对使用者透明：
+
+| 取数方式 | 负责 | 适用 |
+|---|---|---|
+| `DailySyncJob` | 交易日历驱动逐日增量 | 行情/指标类按日发布的表 |
+| `BatchSyncJob` | 批量取数 + 流式分批落盘 | 财报/资金流/宏观等需大窗口回溯的表 |
+
+表名统一用 catalog 规范名（旧名 `daily`/`stock_basic` 仍作别名接受）。
+
+```bash
+zer0share sync --all                              # 全部表
+zer0share sync --dry-run                          # 只打印计划，不联网不写盘
+zer0share sync --topic quote,index                # 按主题
+zer0share sync --table daily_kline                # 单表（可重复）
+zer0share sync --tables daily_kline,daily_basic   # 逗号分隔
+zer0share sync --table daily_kline --start-date 20260101 --end-date 20261021
+zer0share sync --budget-seconds 3600              # 调整批量取数时间预算
+zer0share sync --include-missing                  # 也回补本地从未建成的表
+```
+
+`--table` 与 `--topic` 同时给出时取并集。旧的主题开关
+`--stock/--futures/--options/--etf/--ricequant` 保留原表清单语义不变。
+`--start-date`/`--end-date` 只对按日分区的表有效，快照表（basic/etf_basic 等）
+给了会直接报错。
+
+工程约束（踩坑换来的，勿简化）：
+
+- 覆盖情况只读 parquet footer 统计 + 尾部 row group，绝不整表 pandas 读入
+  （`daily_basic` 8.07M×18 整表读入实测 2.98GB RSS，顶爆 cron cgroup 预算）
+- 时序表统一写 `date=*` 分区，走 pyarrow 按 row group 流式读写 + 原子替换，
+  内存只跟单个 row group 成正比
+- 沿用旧文件压缩算法（`daily_basic` 原是 polars zstd，改 snappy 文件涨 53%；zstd 显式 level 3）
+- 批量取数表每 50 天 / 50 万行一批流式落盘，长历史回溯中断最多损失一批
+- 从未建成的表默认不发请求（否则每晚从零回补 1645 个交易日 → 3600s 窗口必超时）；
+  `--include-missing` 可显式开启
+- 预算耗尽后剩余表标 `DEFERRED(budget)`（默认 780s），
+  exit code 仍按核心表覆盖判定：齐全 0，有缺口 3
+- 按日接口首屏恰好 5000 行时自动 offset 翻页（`adj_factor`/`basic` 实测单日
+  超过 5000，不翻页会静默丢 10% 数据）
 
 ### 股票核心（必选）
 

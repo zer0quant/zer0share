@@ -1,5 +1,6 @@
 [tushare]
 token = "your_tushare_token_here"
+# http_url = ""  # 可选，Tushare 代理接口地址（留空使用官方接口）
 
 # 可选：新闻接口（major_news / news）需要单独开通权限，可以用另一个账号。
 # 整节不写时沿用 [tushare] 的 token。

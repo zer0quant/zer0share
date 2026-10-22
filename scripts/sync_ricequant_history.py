@@ -64,7 +64,7 @@ def main() -> None:
         if cfg.ricequant.enabled
         else None
     )
-    sources = DataSources(tushare=TushareFetcher(cfg.tushare_token), ricequant=ricequant_fetcher)
+    sources = DataSources(tushare=TushareFetcher(cfg.tushare_token, cfg.tushare_http_url), ricequant=ricequant_fetcher)
 
     pipeline = Pipeline(cfg, sources, notifier)
     manifest = RiceQuantHistoryManifest(cfg.db_path)

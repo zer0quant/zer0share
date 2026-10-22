@@ -38,6 +38,9 @@ from zer0share.schema import (
     STK_HOLDERTRADE_COLS,
     STK_LIMIT_COLS,
     SUSPEND_D_COLS,
+    SHARE_FLOAT_COLS,
+    BLOCK_TRADE_COLS,
+    MARGIN_COLS,
     SW_CLASSIFY_COLS,
     SW_DAILY_COLS,
     SW_MEMBER_COLS,
@@ -91,34 +94,67 @@ OPTIONS_EXCHANGES = ["SSE", "SZSE", "CFFEX", "DCE", "SHFE", "CZCE"]
 class TushareFetcher:
     SW_VERSIONS = ("SW2014", "SW2021")
 
-    def __init__(self, token: str):
+    def __init__(self, token: str, http_url: str = ""):
         self._pro = ts.pro_api(token)
+        if http_url:
+            self._pro._DataApi__http_url = http_url
 
     def fetch_basic(self) -> pd.DataFrame:
-        logger.info("拉取 stock_basic")
-        df = self._pro.stock_basic(
-            exchange="",
-            list_status="L,D,P,G",
-            fields=",".join(BASIC_COLS)
+        """拉取 stock_basic 全量。
+
+        接口单次返回上限 5000 行, 而 A 股在市+退市+暂停+预上市合计已超过该上限
+        (实测 offset=0 → 5000 行, offset=5000 → 917 行)。只取第一页会静默丢掉
+        917 只股票, 且丢失的正是尾部的退市/暂停标的 —— 这些恰恰是回测里
+        判断"曾上市"的关键。所以必须 offset 分页取全量。
+        """
+        logger.info("拉取 stock_basic (分页)")
+        df = _fetch_paged(
+            lambda offset=None, limit=None: self._pro.stock_basic(
+                exchange="",
+                list_status="L,D,P,G",
+                fields=",".join(BASIC_COLS),
+                **({"limit": limit, "offset": offset} if offset is not None else {}),
+            )
         )
+        if df is None or len(df) == 0:
+            return _select_columns_or_empty(None, BASIC_COLS)
+        # 分页边界可能因接口排序变动而重复, 按 ts_code 去重 (保留最后一条)
+        if "ts_code" in df.columns:
+            df = df.drop_duplicates(subset=["ts_code"], keep="last").reset_index(drop=True)
+        logger.info(f"stock_basic 分页完成: {len(df)} 行")
         return _select_columns_or_empty(df, BASIC_COLS)
 
     def fetch_daily_kline(self, trade_date: str) -> pd.DataFrame:
         logger.debug(f"拉取日线行情: {trade_date}")
-        df = self._pro.daily(trade_date=trade_date, fields=",".join(DAILY_COLS))
+        df = _fetch_paged(
+            lambda offset=None, limit=None: self._pro.daily(
+                trade_date=trade_date,
+                fields=",".join(DAILY_COLS),
+                **({"limit": limit, "offset": offset} if offset is not None else {}),
+            )
+        )
         return _select_columns_or_empty(df, DAILY_COLS)
 
     def fetch_adj_factor(self, trade_date: str) -> pd.DataFrame:
         logger.debug(f"拉取复权因子: {trade_date}")
-        df = self._pro.adj_factor(trade_date=trade_date, fields=",".join(ADJ_FACTOR_COLS))
+        df = _fetch_paged(
+            lambda offset=None, limit=None: self._pro.adj_factor(
+                trade_date=trade_date,
+                fields=",".join(ADJ_FACTOR_COLS),
+                **({"limit": limit, "offset": offset} if offset is not None else {}),
+            )
+        )
         return _select_columns_or_empty(df, ADJ_FACTOR_COLS)
 
     def fetch_daily_basic(self, trade_date: str) -> pd.DataFrame:
         logger.debug(f"拉取每日指标: {trade_date}")
-        df = self._pro.daily_basic(
-            ts_code="",
-            trade_date=trade_date,
-            fields=",".join(DAILY_BASIC_COLS),
+        df = _fetch_paged(
+            lambda offset=None, limit=None: self._pro.daily_basic(
+                ts_code="",
+                trade_date=trade_date,
+                fields=",".join(DAILY_BASIC_COLS),
+                **({"limit": limit, "offset": offset} if offset is not None else {}),
+            )
         )
         return _select_columns_or_empty(df, DAILY_BASIC_COLS)
 
@@ -140,6 +176,33 @@ class TushareFetcher:
         logger.debug(f"拉取每日涨跌停价格: {trade_date}")
         df = self._pro.stk_limit(trade_date=trade_date, fields=",".join(STK_LIMIT_COLS))
         return _select_columns_or_empty(df, STK_LIMIT_COLS)
+
+    def fetch_share_float(self, trade_date: str) -> pd.DataFrame:
+        """拉取限售股解禁 (按解禁日期查)"""
+        logger.debug(f"拉取限售股解禁: {trade_date}")
+        df = self._pro.share_float(
+            float_date=trade_date,
+            fields=",".join(SHARE_FLOAT_COLS),
+        )
+        return _select_columns_or_empty(df, SHARE_FLOAT_COLS)
+
+    def fetch_block_trade(self, trade_date: str) -> pd.DataFrame:
+        """拉取大宗交易 (按交易日查)"""
+        logger.debug(f"拉取大宗交易: {trade_date}")
+        df = self._pro.block_trade(
+            trade_date=trade_date,
+            fields=",".join(BLOCK_TRADE_COLS),
+        )
+        return _select_columns_or_empty(df, BLOCK_TRADE_COLS)
+
+    def fetch_margin(self, trade_date: str) -> pd.DataFrame:
+        """拉取融资融券 (按交易日查)"""
+        logger.debug(f"拉取融资融券: {trade_date}")
+        df = self._pro.margin(
+            trade_date=trade_date,
+            fields=",".join(MARGIN_COLS),
+        )
+        return _select_columns_or_empty(df, MARGIN_COLS)
 
     def fetch_index_weight(
         self, index_code: str, start_date: str, end_date: str
@@ -520,4 +583,37 @@ class TushareFetcher:
 def _select_columns_or_empty(df: pd.DataFrame | None, columns: list[str]) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame(columns=columns)
+    missing = [c for c in columns if c not in df.columns]
+    if missing:
+        df[missing] = pd.NA  # ponytail: Tushare may omit columns added after early dates (e.g. limit_status)
     return df[columns]
+
+
+def _fetch_paged(fn, page_size: int = 5000, max_pages: int = 200) -> pd.DataFrame | None:
+    """调用 tushare 接口并自动 offset 分页取全量。
+
+    tushare 单次返回上限 5000 行。返回行数**正好等于 5000** 时, 无法区分
+    "刚好满页" 和 "被接口截断", 而误判为未截断会静默丢数据 —— 实测 adj_factor
+    单日真实 5578 行, 不翻页只拿到 5000 (丢 578 行 ≈ 10%)。
+
+    因此: 先取一页, 满页则继续 offset 翻页, 直到取不满一页为止。
+    对不触及上限的接口 (daily/daily_basic/stk_limit 实测), 不会多发请求。
+
+    fn 签名: fn(offset=None, limit=None) → DataFrame | None。
+    首调用 offset=None (不带 offset/limit 参数), 后续调用带上。
+    """
+    df = fn()
+    if df is None or len(df) < page_size:
+        return df
+    parts = [df]
+    offset = len(df)
+    for _ in range(max_pages - 1):
+        nxt = fn(offset=offset, limit=page_size)
+        if nxt is None or len(nxt) == 0:
+            break
+        parts.append(nxt)
+        if len(nxt) < page_size:
+            break
+        offset += len(nxt)
+        time.sleep(0.05)
+    return pd.concat(parts, ignore_index=True)

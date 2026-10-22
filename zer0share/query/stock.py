@@ -9,6 +9,9 @@ from zer0share.catalog import (
     STK_HOLDERTRADE_SPEC,
     STK_LIMIT_SPEC,
     SUSPEND_D_SPEC,
+    BLOCK_TRADE_SPEC,
+    SHARE_FLOAT_SPEC,
+    MARGIN_SPEC,
 )
 from zer0share.query import QueryContext
 from zer0share.query._helpers import format_date_columns
@@ -121,6 +124,42 @@ def stk_limit(ctx: QueryContext, ts_code=None, trade_date=None,
     return _daily_repo(ctx, STK_LIMIT_SPEC).query(
         ts_code, trade_date, start_date, end_date, fields, limit=limit, offset=offset
     )
+
+
+def block_trade(ctx: QueryContext, ts_code=None, trade_date=None,
+                start_date=None, end_date=None, fields=None,
+                limit: int | None = None, offset: int | None = None) -> pd.DataFrame:
+    """Query block trades (大宗交易) — price/vol/amount off-exchange per stock per day."""
+    return _daily_repo(ctx, BLOCK_TRADE_SPEC).query(
+        ts_code, trade_date, start_date, end_date, fields, limit=limit, offset=offset
+    )
+
+
+def share_float(ctx: QueryContext, ts_code=None, float_date=None,
+                start_date=None, end_date=None, fields=None,
+                limit: int | None = None, offset: int | None = None) -> pd.DataFrame:
+    """Query restricted-share unlocks (限售股解禁).
+
+    分区键是解禁日 float_date 而非交易日, 因此 trade_date 参数在此不可用;
+    DailyPartitionRepository 按 spec.date_column 定位分区。
+    """
+    return _daily_repo(ctx, SHARE_FLOAT_SPEC).query(
+        ts_code, float_date, start_date, end_date, fields, limit=limit, offset=offset
+    )
+
+
+def margin(ctx: QueryContext, exchange_id=None, trade_date=None,
+           start_date=None, end_date=None, fields=None,
+           limit: int | None = None, offset: int | None = None) -> pd.DataFrame:
+    """Query margin trading (融资融券) aggregate balances per exchange per day."""
+    repo = _daily_repo(ctx, MARGIN_SPEC)
+    filters: list[SqlFilter] = []
+    if exchange_id is not None:
+        filters.append(eq_filter("exchange_id", exchange_id, MARGIN_SPEC.columns))
+    filters.extend(
+        date_range_filters("trade_date", trade_date, start_date, end_date, MARGIN_SPEC.columns)
+    )
+    return repo.query(fields=fields, filters=filters, limit=limit, offset=offset)
 
 
 def universe(ctx: QueryContext, universe=None, ts_code=None, trade_date=None,

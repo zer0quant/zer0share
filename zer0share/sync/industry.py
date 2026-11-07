@@ -43,7 +43,7 @@ class IndustrySyncJob(SyncJob):
             rt.meta.update_last_date("sw_member", today)
             logger.info(f"sw_member 同步完成: {len(df_member)} 条")
 
-            rt.notifier.send(
+            rt.notifier.send_success(
                 f"industry 同步完成\n"
                 f"日期：{today}｜分类 {len(df_classify)} 条｜成分 {len(df_member)} 条"
             )
@@ -131,7 +131,10 @@ class SwDailySyncJob(SyncJob):
         if failed_days:
             msg += f"\n失败天数: {len(failed_days)}"
         logger.info(msg)
-        rt.notifier.send(msg)
+        if failed_days:
+            rt.notifier.send(msg)
+        else:
+            rt.notifier.send_success(msg)
 
 
 def build_jobs(cfg, fetcher) -> list[SyncJob]:

@@ -141,3 +141,95 @@ def test_start_scheduler_uses_correct_cron_times(tmp_path):
     assert job_cron_map["basic"] == {"hour": 9, "minute": 10}
     assert job_cron_map["daily_kline"] == {"hour": 16, "minute": 30}
     assert job_cron_map["adj_factor"] == {"hour": 16, "minute": 35}
+
+
+ENABLED_CONFIG = VALID_CONFIG.replace(
+    '[notifier]\nwecom_webhook_url = "https://example.com"\nenabled = false',
+    '[notifier]\nenabled = true\ndigest_time = "18:10"\n\n[notifier.wecom]\nenabled = true\nwebhook_url = "https://example.com"',
+)
+
+
+def _start_with_fake_jobs(cfg_file, notifier):
+    registered_jobs = {}
+    cron_kwargs = {}
+
+    def fake_cron_trigger(**kwargs):
+        return dict(kwargs)
+
+    def fake_add_job(func, trigger, id=None, **kwargs):
+        registered_jobs[id] = func
+        cron_kwargs[id] = trigger
+
+    patches = (
+        patch("tushare.pro_api"),
+        patch("zer0share.scheduler.build_notifier", return_value=notifier),
+        patch("zer0share.scheduler.CronTrigger", side_effect=fake_cron_trigger),
+        patch("apscheduler.schedulers.blocking.BlockingScheduler.start"),
+        patch("apscheduler.schedulers.blocking.BlockingScheduler.add_job", side_effect=fake_add_job),
+    )
+    return registered_jobs, cron_kwargs, patches
+
+
+def test_start_scheduler_registers_daily_digest_and_buffers_success(tmp_path):
+    from contextlib import ExitStack
+
+    cfg_file = tmp_path / "settings.toml"
+    cfg_file.write_text(ENABLED_CONFIG.replace('db_path = "db/meta.duckdb"', f'db_path = "{tmp_path}/db/meta.duckdb"'), encoding="utf-8")
+    notifier = MagicMock()
+    jobs, crons, patches = _start_with_fake_jobs(cfg_file, notifier)
+
+    with ExitStack() as stack:
+        for p in patches:
+            stack.enter_context(p)
+        mock_pipeline_cls = stack.enter_context(patch("zer0share.scheduler.Pipeline"))
+        mock_pipeline = mock_pipeline_cls.return_value
+        mock_pipeline.__enter__.return_value = mock_pipeline
+        mock_pipeline.__exit__.return_value = False
+
+        def fake_run(table_name):
+            job_notifier = mock_pipeline_cls.call_args[0][2]
+            job_notifier.send_success(f"{table_name} 同步完成\n写入 1 天")
+
+        mock_pipeline.run.side_effect = fake_run
+
+        from zer0share.scheduler import start_scheduler
+        start_scheduler(str(cfg_file))
+
+        assert crons["__daily_digest__"] == {"hour": 18, "minute": 10}
+        notifier.reset_mock()
+
+        jobs["basic"]()
+        notifier.send.assert_not_called()
+        notifier.send_success.assert_not_called()
+
+        jobs["__daily_digest__"]()
+
+    notifier.send.assert_called_once()
+    msg = notifier.send.call_args[0][0]
+    assert "每日同步汇总" in msg
+    assert "basic: 写入 1 天" in msg
+    assert (tmp_path / "db" / "digest_state.json").exists()
+
+
+def test_start_scheduler_without_digest_time_sends_success_immediately(tmp_path):
+    from contextlib import ExitStack
+
+    cfg_file = tmp_path / "settings.toml"
+    cfg_file.write_text(
+        ENABLED_CONFIG.replace('digest_time = "18:10"', 'digest_time = ""')
+        .replace('db_path = "db/meta.duckdb"', f'db_path = "{tmp_path}/db/meta.duckdb"'),
+        encoding="utf-8",
+    )
+    notifier = MagicMock()
+    jobs, _, patches = _start_with_fake_jobs(cfg_file, notifier)
+
+    with ExitStack() as stack:
+        for p in patches:
+            stack.enter_context(p)
+        mock_pipeline_cls = stack.enter_context(patch("zer0share.scheduler.Pipeline"))
+        from zer0share.scheduler import start_scheduler
+        start_scheduler(str(cfg_file))
+
+        assert "__daily_digest__" not in jobs
+        jobs["basic"]()
+        assert mock_pipeline_cls.call_args[0][2] is notifier

@@ -52,6 +52,10 @@ ricequant_etf_minute = "16:35"
 
 [notifier]
 enabled = false  # 至少启用一个通道后改为 true
+# 失败/告警立即推送；成功只在每天 digest_time 汇总推送一条（同时作为调度器存活信号）
+# 设为 "" 则恢复为每次成功都立即推送
+# 汇总状态保存在 db_path 同目录的 digest_state.json，重启不丢；错过汇总时间会在启动时补发
+digest_time = "18:10"
 
 [notifier.wecom]
 enabled = false

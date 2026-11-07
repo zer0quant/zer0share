@@ -84,7 +84,7 @@ class IndexWeightSyncJob(SyncJob):
             f"写入 {success} 天｜空窗口 {empty_months}｜已存在 {skipped_existing}"
         )
         logger.info(msg)
-        rt.notifier.send(msg)
+        rt.notifier.send_success(msg)
 
 
 class IndexDailySyncJob(SyncJob):
@@ -126,7 +126,7 @@ class IndexDailySyncJob(SyncJob):
         if not all_frames:
             msg = "index_daily 无数据，跳过"
             logger.info(msg)
-            rt.notifier.send(msg)
+            rt.notifier.send_success(msg)
             return
 
         combined = pd.concat(all_frames, ignore_index=True)
@@ -159,7 +159,7 @@ class IndexDailySyncJob(SyncJob):
             f"写入 {success} 天 / {total_rows} 条记录｜已存在 {skipped_existing}"
         )
         logger.info(msg)
-        rt.notifier.send(msg)
+        rt.notifier.send_success(msg)
 
 
 def build_jobs(cfg, fetcher) -> list[SyncJob]:

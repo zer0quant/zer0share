@@ -34,7 +34,7 @@ class RiceQuantBasicSyncJob(SyncJob):
         self.store.write(df)
         today = rt.calendar.today()
         rt.meta.update_last_date(BASIC_TABLE_NAME, today)
-        rt.notifier.send(f"{BASIC_TABLE_NAME} 同步完成\n日期：{today}｜{len(df)} 行")
+        rt.notifier.send_success(f"{BASIC_TABLE_NAME} 同步完成\n日期：{today}｜{len(df)} 行")
 
 
 class RiceQuantStockMinuteSyncJob(SyncJob):
@@ -120,7 +120,10 @@ class RiceQuantStockMinuteSyncJob(SyncJob):
             )
             if failures:
                 message += "\n失败样例：" + "; ".join(f"{code}: {err}" for code, err in failures[:5])
-            rt.notifier.send(message)
+            if failures:
+                rt.notifier.send(message)
+            else:
+                rt.notifier.send_success(message)
 
 
 class RiceQuantETFBasicSyncJob(SyncJob):
@@ -137,7 +140,7 @@ class RiceQuantETFBasicSyncJob(SyncJob):
         self.store.write(df)
         today = rt.calendar.today()
         rt.meta.update_last_date(ETF_BASIC_TABLE_NAME, today)
-        rt.notifier.send(f"{ETF_BASIC_TABLE_NAME} 同步完成\n日期：{today}｜{len(df)} 行")
+        rt.notifier.send_success(f"{ETF_BASIC_TABLE_NAME} 同步完成\n日期：{today}｜{len(df)} 行")
 
 
 class RiceQuantETFMinuteSyncJob(SyncJob):
@@ -234,7 +237,10 @@ class RiceQuantETFMinuteSyncJob(SyncJob):
             if failures:
                 message += "\n失败样例：" + "; ".join(f"{code}: {err}" for code, err in failures[:5])
                 logger.warning(f"{ETF_MINUTE_TABLE_NAME}: {trade_date} failures: {failures[:5]}")
-            rt.notifier.send(message)
+            if failures:
+                rt.notifier.send(message)
+            else:
+                rt.notifier.send_success(message)
 
 
 def build_jobs(cfg, sources: DataSources):

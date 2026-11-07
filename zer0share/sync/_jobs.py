@@ -196,7 +196,7 @@ class DailySyncJob(SyncJob):
             f"{trading_days[0]} ~ {trading_days[-1]}" if len(trading_days) > 1
             else trading_days[0]
         )
-        rt.notifier.send(
+        rt.notifier.send_success(
             f"{self.spec.name} 同步完成\n"
             f"日期：{date_range}\n"
             f"写入 {success} 天 / {total_rows} 条记录｜空 {empty}｜已存在 {skipped_existing}｜耗时 {_format_duration(elapsed)}"
@@ -319,7 +319,7 @@ class CalendarDateSyncJob(SyncJob):
             f"{days[0]} ~ {days[-1]}" if len(days) > 1
             else days[0]
         )
-        rt.notifier.send(
+        rt.notifier.send_success(
             f"{self.spec.name} 同步完成\n"
             f"日期：{date_range}\n"
             f"写入 {success} 天 / {total_rows} 条记录｜空 {empty}｜已存在 {skipped_existing}｜耗时 {_format_duration(elapsed)}"
@@ -366,7 +366,7 @@ class SnapshotSyncJob(SyncJob):
         self.store.write(df)
         rt.meta.update_last_date(self.spec.name, today)
         logger.info(f"{self.spec.name}: snapshot written ({len(df)} rows)")
-        rt.notifier.send(
+        rt.notifier.send_success(
             f"{self.spec.name} 同步完成\n"
             f"日期：{today}｜{len(df)} 行"
         )

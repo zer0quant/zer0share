@@ -57,7 +57,7 @@ class TradeCalSyncJob(SyncJob):
                 rt.meta.update_last_date("trade_cal", min(max_dates))
             latest = min(max_dates) if max_dates else end
             logger.info("trade_cal 全部同步完成")
-            rt.notifier.send(f"trade_cal 同步完成\n已覆盖至：{latest}")
+            rt.notifier.send_success(f"trade_cal 同步完成\n已覆盖至：{latest}")
         except Exception as e:
             logger.error(f"trade_cal 同步失败: {e}")
             rt.notifier.send(f"trade_cal 同步失败\n{e}")

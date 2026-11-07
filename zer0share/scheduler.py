@@ -6,6 +6,7 @@ from apscheduler.triggers.cron import CronTrigger
 from loguru import logger
 
 from zer0share.config import load_config
+from zer0share.digest import DigestNotifier
 from zer0share.logging import init_logger
 from zer0share.notifier import build_notifier
 from zer0share.pipeline import Pipeline
@@ -71,9 +72,26 @@ def start_scheduler(config_path: str = "config/settings.toml") -> None:
         ),
     )
     notifier = build_notifier(cfg.notifier)
+    digest_time = cfg.notifier.digest_time if cfg.notifier.enabled else ""
+    digest = (
+        DigestNotifier(
+            notifier,
+            cfg.schedule,
+            state_path=cfg.db_path.parent / "digest_state.json",
+            digest_time=digest_time,
+        )
+        if digest_time
+        else None
+    )
 
     def run_table(table_name: str) -> None:
-        run_scheduled_table(cfg, sources, notifier, table_name)
+        if digest is None:
+            run_scheduled_table(cfg, sources, notifier, table_name)
+            return
+        digest.run_table(
+            table_name,
+            lambda: run_scheduled_table(cfg, sources, digest, table_name),
+        )
 
     scheduler = BlockingScheduler()
     for table_name, time_str in cfg.schedule.items():
@@ -83,9 +101,17 @@ def start_scheduler(config_path: str = "config/settings.toml") -> None:
             CronTrigger(hour=hour, minute=minute),
             id=table_name,
         )
+    if digest is not None:
+        hour, minute = (int(x) for x in digest_time.split(":"))
+        scheduler.add_job(
+            digest.flush,
+            CronTrigger(hour=hour, minute=minute),
+            id="__daily_digest__",
+        )
     table_count = len(cfg.schedule)
     logger.info(f"调度器启动: {table_count} 个表已调度")
+    digest_line = f"\n每日汇总：{digest_time}" if digest is not None else ""
     notifier.send(
-        f"调度器已启动\n已调度：{table_count} 个表\n配置：{config_path}"
+        f"调度器已启动\n已调度：{table_count} 个表\n配置：{config_path}{digest_line}"
     )
     scheduler.start()

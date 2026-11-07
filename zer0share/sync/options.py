@@ -30,7 +30,7 @@ class OptBasicSyncJob(SyncJob):
             self._store.write(combined)
             rt.meta.update_last_date("opt_basic", today)
             logger.info(f"opt_basic 同步完成: {len(combined)} 条")
-            rt.notifier.send(f"opt_basic 同步完成\n日期：{today}｜{len(combined)} 条记录")
+            rt.notifier.send_success(f"opt_basic 同步完成\n日期：{today}｜{len(combined)} 条记录")
         except Exception as e:
             logger.error(f"opt_basic 同步失败: {e}")
             rt.notifier.send(f"opt_basic 同步失败\n{e}")

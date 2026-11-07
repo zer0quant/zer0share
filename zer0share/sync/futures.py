@@ -36,7 +36,7 @@ class FutBasicSyncJob(SyncJob):
             self._store.write(combined)
             rt.meta.update_last_date("fut_basic", today)
             logger.info(f"fut_basic 同步完成: {len(combined)} 条")
-            rt.notifier.send(f"fut_basic 同步完成\n日期：{today}｜{len(combined)} 条记录")
+            rt.notifier.send_success(f"fut_basic 同步完成\n日期：{today}｜{len(combined)} 条记录")
         except Exception as e:
             logger.error(f"fut_basic 同步失败: {e}")
             rt.notifier.send(f"fut_basic 同步失败\n{e}")
@@ -100,7 +100,7 @@ class FutWeeklyDetailSyncJob(SyncJob):
             f"写入 {success} 周｜已存在 {skipped_existing}｜共 {len(weeks)} 周"
         )
         logger.info(msg)
-        rt.notifier.send(msg)
+        rt.notifier.send_success(msg)
 
 
 def build_jobs(cfg, fetcher) -> list[SyncJob]:

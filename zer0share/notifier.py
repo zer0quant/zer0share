@@ -13,6 +13,8 @@ from zer0share.config import NotifierConfig
 class NotifierProtocol(Protocol):
     def send(self, message: str) -> None: ...
 
+    def send_success(self, message: str) -> None: ...
+
     def notify_start(self, stage: str, details: dict | None = None) -> None: ...
 
     def notify_progress(self, stage: str, done: int, total: int) -> None: ...
@@ -24,6 +26,9 @@ class NotifierProtocol(Protocol):
 
 class NullNotifier:
     def send(self, message: str) -> None:
+        pass
+
+    def send_success(self, message: str) -> None:
         pass
 
     def notify_start(self, stage: str, details: dict | None = None) -> None:
@@ -67,6 +72,9 @@ class WeComNotifier:
     def send(self, message: str) -> None:
         self._post_text(f"[zer0share] {message}")
 
+    def send_success(self, message: str) -> None:
+        self.send(message)
+
     def notify_start(self, stage: str, details: dict | None = None) -> None:
         lines = [f"{self._prefix(stage)} 开始"]
         for key, value in (details or {}).items():
@@ -107,6 +115,9 @@ class FeishuNotifier:
                 fields=[("内容", message)],
             )
         )
+
+    def send_success(self, message: str) -> None:
+        self.send(message)
 
     def notify_start(self, stage: str, details: dict | None = None) -> None:
         self._send(
@@ -206,6 +217,10 @@ class CompositeNotifier:
     def send(self, message: str) -> None:
         for notifier in self.notifiers:
             notifier.send(message)
+
+    def send_success(self, message: str) -> None:
+        for notifier in self.notifiers:
+            notifier.send_success(message)
 
     def notify_start(self, stage: str, details: dict | None = None) -> None:
         for notifier in self.notifiers:

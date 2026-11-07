@@ -322,8 +322,9 @@ def test_sync_daily_kline_sends_completion_notification(pipeline, cfg, fetcher, 
     fetcher.fetch_daily_kline.return_value = _kline_df("20240102")
     pipeline._runtime.meta.update_last_date("daily_kline", "20240101")
     pipeline.run("daily_kline")
-    notifier.send.assert_called_once()
-    msg = notifier.send.call_args[0][0]
+    notifier.send.assert_not_called()
+    notifier.send_success.assert_called_once()
+    msg = notifier.send_success.call_args[0][0]
     assert "同步完成" in msg
 
 
@@ -752,7 +753,7 @@ def test_sync_index_daily_no_data_sends_notification(pipeline, cfg, fetcher, not
     with patch("zer0share.sync.index.time.sleep"):
         pipeline.run("index_daily")
 
-    notifier.send.assert_called_once_with("index_daily 无数据，跳过")
+    notifier.send_success.assert_called_once_with("index_daily 无数据，跳过")
 
 
 def test_sync_index_daily_updates_metastore(pipeline, cfg, fetcher):

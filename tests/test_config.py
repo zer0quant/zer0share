@@ -378,3 +378,16 @@ def test_load_config_keeps_legacy_wecom_webhook_url_compatibility(tmp_path):
     cfg = load_config(cfg_file)
     assert cfg.wecom_webhook_url == "https://example.com/webhook"
     assert cfg.notifier.wecom.webhook_url == "https://example.com/webhook"
+
+
+def test_load_config_digest_time_defaults_and_validates(tmp_path):
+    cfg_file = tmp_path / "settings.toml"
+    cfg_file.write_text(VALID_TOML, encoding="utf-8")
+    assert load_config(cfg_file).notifier.digest_time == "18:10"
+
+    cfg_file.write_text(VALID_TOML.replace("[notifier]", '[notifier]\ndigest_time = ""'), encoding="utf-8")
+    assert load_config(cfg_file).notifier.digest_time == ""
+
+    cfg_file.write_text(VALID_TOML.replace("[notifier]", '[notifier]\ndigest_time = "25:00"'), encoding="utf-8")
+    with pytest.raises(ValueError, match="digest_time"):
+        load_config(cfg_file)

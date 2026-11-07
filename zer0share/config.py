@@ -38,6 +38,8 @@ class NotifierConfig:
     enabled: bool
     wecom: WeComNotifierConfig
     feishu: FeishuNotifierConfig
+    # 成功消息每天汇总一次推送的时间（HH:MM）；空字符串表示每次成功都立即推送
+    digest_time: str = "18:10"
 
 
 @dataclass(frozen=True)
@@ -168,7 +170,21 @@ def _parse_notifier(raw: dict) -> NotifierConfig:
             enabled=bool(raw_feishu.get("enabled", enabled and bool(feishu_url))),
             webhook_url=feishu_url,
         ),
+        digest_time=_parse_digest_time(raw_notifier.get("digest_time", "18:10")),
     )
+
+
+def _parse_digest_time(value) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        hour, minute = (int(x) for x in text.split(":"))
+    except ValueError:
+        raise ValueError(f"notifier.digest_time 格式错误: 期望 'HH:MM', 得到 {value!r}") from None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(f"notifier.digest_time 格式错误: 期望 'HH:MM', 得到 {value!r}")
+    return text
 
 
 def _parse_quality(raw_quality: dict | None) -> QualityConfig:

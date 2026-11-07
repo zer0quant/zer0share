@@ -69,6 +69,7 @@ log_path = "logs/pipeline.log"
 
 [notifier]
 enabled = false            # 至少启用一个通道后改为 true
+digest_time = "18:10"      # 成功消息每日汇总时间；设为 "" 恢复每次成功都推送
 
 [notifier.wecom]
 enabled = false
@@ -78,6 +79,30 @@ webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
 enabled = false
 webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_KEY"
 ```
+
+### 通知与每日汇总
+
+定时调度下的推送规则：
+
+| 情况 | 推送时机 |
+|---|---|
+| 同步失败、未处理的异常、数据质检 warn/fail | 立即推送 |
+| 部分失败（分钟线部分批次、`sw_daily` 失败天数、`index_daily` 单个指数拉取失败等） | 立即推送 |
+| 同步成功 | 不单独推送，每天 `digest_time` 汇总成一条 |
+| 调度器启动 | 立即推送一条 |
+
+每日汇总列出当天各表状态：成功、失败、完成但有告警、未运行（配置了却没跑）、运行中。**每天固定会收到这一条，没收到就说明调度器本身出了问题。**
+
+```
+每日同步汇总 2026-11-07
+成功 30/33｜失败 1｜未运行 1｜有告警 1
+失败：- fut_wsr: RuntimeError: ...
+完成但有告警：- index_daily: ...
+未运行：- opt_daily
+成功：- daily_kline: 日期：20261107｜写入 1 天 / 5300 条记录 ...
+```
+
+汇总状态保存在 `db_path` 同目录的 `digest_state.json`（原子写入），调度器重启不丢；重启前正在运行的表记为“被中断”，若重启时已错过汇总时间，会在启动时补发。CLI 手动执行 `sync` 时不汇总，成功消息照常即时推送。
 
 ## 快速开始
 
@@ -109,7 +134,7 @@ print(pro.daily(ts_code='000001.SZ', start_date='20240101', end_date='20240131')
 /data/zer0share-data/
 ├── config/settings.toml   # 只读挂载；路径保持相对写法（data、db/meta.duckdb、logs/pipeline.log）
 ├── data/                  # Parquet 数据
-├── db/                    # DuckDB 元数据
+├── db/                    # DuckDB 元数据 + digest_state.json（每日汇总状态）
 ├── logs/
 └── reports/               # 数据质检报告
 ```
@@ -180,6 +205,7 @@ zer0share/
 │   ├── universe.py   # 股票池构建
 │   ├── scheduler.py  # APScheduler 定时任务
 │   ├── notifier.py   # 企业微信 / 飞书告警
+│   ├── digest.py     # 定时任务成功消息的每日汇总
 │   └── storage.py    # Parquet 读写 + DuckDB MetaStore
 ├── config/           # settings.example.toml
 ├── deploy/           # Docker 镜像、compose、发布脚本（systemd/ 为旧方案）

@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=admin
-WorkingDirectory=/data/projects/zer0share
+WorkingDirectory=/data/projects/zer0quant/zer0share
 ExecStart=/home/admin/miniconda3/bin/python3 main.py scheduler start
 Restart=on-failure
 RestartSec=30

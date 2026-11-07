@@ -9,10 +9,10 @@ dist/
 config/settings.toml
 
 # Data directories
-data/
-db/
-logs/
-reports/
+/data
+/db
+/logs
+/reports
 
 # Python cache
 __pycache__/
@@ -27,8 +27,6 @@ __pycache__/
 # Local git worktrees
 .worktrees/
 
-# uv lock file
-uv.lock
 
 # Claude local config
 .claude/

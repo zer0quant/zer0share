@@ -1,0 +1,21 @@
+# 生产调度服务。数据目录在宿主机 ${ZER0SHARE_DATA_ROOT}（默认 /data/zer0share-data）
+# 部署：scripts/deploy.sh
+services:
+  zer0share-scheduler:
+    image: zer0share:${TAG:-latest}
+    container_name: zer0share-scheduler
+    user: "1000:1000"
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ${ZER0SHARE_DATA_ROOT:-/data/zer0share-data}/data:/app/data
+      - ${ZER0SHARE_DATA_ROOT:-/data/zer0share-data}/db:/app/db
+      - ${ZER0SHARE_DATA_ROOT:-/data/zer0share-data}/logs:/app/logs
+      - ${ZER0SHARE_DATA_ROOT:-/data/zer0share-data}/reports:/app/reports
+      - ${ZER0SHARE_DATA_ROOT:-/data/zer0share-data}/config/settings.toml:/app/config/settings.toml:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"

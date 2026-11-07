@@ -1,0 +1,8 @@
+*
+!pyproject.toml
+!uv.lock
+!main.py
+!README.md
+!LICENSE
+!zer0share/
+**/__pycache__

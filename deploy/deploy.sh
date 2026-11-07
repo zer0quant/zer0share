@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # 构建并发布 zer0share 调度容器。
-# 用法：scripts/deploy.sh            # 用当前 git HEAD 构建，tag = 日期-短 hash
-#       scripts/deploy.sh <tag>      # 回滚到已有镜像 tag（不重新构建）
+# 用法：deploy/deploy.sh            # 用当前 git HEAD 构建，tag = 日期-短 hash
+#       deploy/deploy.sh <tag>      # 回滚到已有镜像 tag（不重新构建）
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+COMPOSE=(docker compose -f deploy/docker-compose.yml)
 
 if [[ $# -ge 1 ]]; then
     TAG="$1"
@@ -15,9 +16,9 @@ else
         exit 1
     fi
     TAG="$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
-    docker build -t "zer0share:${TAG}" -t zer0share:latest .
+    docker build -f deploy/Dockerfile -t "zer0share:${TAG}" -t zer0share:latest .
 fi
 
-TAG="$TAG" docker compose up -d
+TAG="$TAG" "${COMPOSE[@]}" up -d
 echo "已部署 zer0share:${TAG}"
-docker compose ps
+"${COMPOSE[@]}" ps

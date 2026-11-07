@@ -41,7 +41,7 @@ A 股、ETF、期货、期权数据本地化管道：基于 [Tushare Pro](https:
 前置要求：
 
 - Python 3.11+ 和 [uv](https://github.com/astral-sh/uv)
-- Tushare Pro Token（基础行情需积分 ≥ 2000，部分专题表要求更高，详见[同步指南](docs/SYNC_GUIDE.md)）
+- Tushare Pro Token（基础行情需积分 ≥ 2000，部分专题表要求更高，详见[同步指南](docs/guides/SYNC_GUIDE.md)）
 
 ```bash
 git clone https://github.com/zer0quant/zer0share.git
@@ -92,7 +92,7 @@ print(pro.daily(ts_code='000001.SZ', start_date='20240101', end_date='20240131')
 "
 ```
 
-同步顺序、逐表命令和定时调度部署见[同步指南](docs/SYNC_GUIDE.md)。
+同步顺序、逐表命令和定时调度部署见[同步指南](docs/guides/SYNC_GUIDE.md)。
 
 ## 本地查询 API
 
@@ -111,7 +111,7 @@ fut_bar = pro.fut_daily(ts_code="RB2410.SHFE", start_date="20240101", end_date="
 opt_bar = pro.opt_daily(ts_code="10004462.SH", start_date="20240101", end_date="20240131")
 ```
 
-全部 30+ 个查询方法、完整示例和冒烟测试见[本地查询 API 文档](docs/query-api.md)。
+全部 30+ 个查询方法、完整示例和冒烟测试见[本地查询 API 文档](docs/guides/query-api.md)。
 
 仓库还内置 AI Skill（`skills/zer0share-data`），支持让 Codex、Claude Code 等智能体把中文自然语言数据请求转成本地查询流程。
 
@@ -119,12 +119,12 @@ opt_bar = pro.opt_daily(ts_code="10004462.SH", start_date="20240101", end_date="
 
 | 命令 | 说明 |
 |------|------|
-| `sync --table <name>` | 增量同步单个表（全部 30+ 个表见[同步指南](docs/SYNC_GUIDE.md)） |
+| `sync --table <name>` | 增量同步单个表（全部 30+ 个表见[同步指南](docs/guides/SYNC_GUIDE.md)） |
 | `sync --all` | 按顺序同步全部 |
 | `sync --stock` / `--etf` / `--futures` / `--options` | 按专题分组同步 |
 | `sync --ricequant` | 同步 RiceQuant 分钟线（可选，需 RiceQuant 账号） |
 | `news sync --api major_news\|news --start-date <YYYYMMDD> [--src ...]` | 同步新闻到 `data/news/news.db`（原始返回归档在 `data/news/raw/`），已完成的日期自动跳过 |
-| `build-universe [--date / --start-date / --end-date]` | 构建股票池（详见[股票池文档](docs/universe.md)） |
+| `build-universe [--date / --start-date / --end-date]` | 构建股票池（详见[股票池文档](docs/guides/universe.md)） |
 | `status` | 查看各表最后同步时间 |
 | `quality check [--all / --market / --table]` | 本地数据质检，报告写入 `reports/quality/` |
 | `scheduler start` | 启动定时调度 |
@@ -150,21 +150,26 @@ zer0share/
 │   ├── notifier.py   # 企业微信告警
 │   └── storage.py    # Parquet 读写 + DuckDB MetaStore
 ├── config/           # settings.example.toml
-├── docs/             # 文档
+├── deploy/           # Docker 镜像、compose、发布脚本（systemd/ 为旧方案）
+├── docs/
+│   ├── guides/       # 使用文档
+│   ├── dev/          # 开发笔记、设计与实施计划
+│   └── reports/      # 数据质检等报告
 ├── examples/         # 按专题分类的本地查询冒烟测试
+├── scripts/          # 一次性运维与数据校验脚本
 ├── skills/           # zer0share-data AI Skill
 └── tests/            # pytest 测试套件
 ```
 
 ## 文档
 
-- [同步指南](docs/SYNC_GUIDE.md)：积分要求、全部同步表、首次同步顺序和定时调度部署
-- [本地查询 API](docs/query-api.md)：全部查询方法、完整示例和冒烟测试
-- [股票池构建](docs/universe.md)：6 个股票池的定义和过滤规则
-- [数据存储结构](docs/storage.md)：Parquet 分区布局和 DuckDB 元数据
+- [同步指南](docs/guides/SYNC_GUIDE.md)：积分要求、全部同步表、首次同步顺序和定时调度部署
+- [本地查询 API](docs/guides/query-api.md)：全部查询方法、完整示例和冒烟测试
+- [股票池构建](docs/guides/universe.md)：6 个股票池的定义和过滤规则
+- [数据存储结构](docs/guides/storage.md)：Parquet 分区布局和 DuckDB 元数据
 - [examples/README.md](examples/README.md)：示例脚本清单和默认参数
-- [RiceQuant 分钟线](docs/ricequant.md)：可选分钟线数据源的配置、同步和查询
-- [开发笔记](docs/devlog.md)：记录设计过程和踩坑的系列文章目录
+- [RiceQuant 分钟线](docs/guides/ricequant.md)：可选分钟线数据源的配置、同步和查询
+- [开发笔记](docs/dev/devlog.md)：记录设计过程和踩坑的系列文章目录
 
 ## 开发
 
@@ -178,7 +183,7 @@ uv run pytest tests/test_pipeline.py -v  # 运行单个测试文件
 
 我持续记录这个项目的设计过程、踩坑记录和后续扩展：
 
-- [开发笔记目录](docs/devlog.md)：所有文章的索引，跟踪开发进度从这里开始
+- [开发笔记目录](docs/dev/devlog.md)：所有文章的索引，跟踪开发进度从这里开始
 - 微信公众号「极客投研笔记」：同步更新，欢迎关注
 
 如果你对 AI + 量化投研、本地量化数据系统、因子研究工作流感兴趣，欢迎交流。

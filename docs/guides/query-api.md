@@ -141,7 +141,7 @@ flash = pro.news(start_date="20250324", end_date="20250324", keyword="降准")  
 
 ## 冒烟测试
 
-完整示例清单和默认参数见 [examples/README.md](../examples/README.md)。
+完整示例清单和默认参数见 [examples/README.md](../../examples/README.md)。
 
 ```bash
 # 股票示例

@@ -152,24 +152,38 @@ daily_basic       = "17:05"
 
 同步失败可通过企业微信告警，在 `[notifier]` 里配置 webhook。
 
-### systemd 服务（推荐，服务器常驻）
+### Docker 部署（推荐，服务器常驻）
+
+镜像只包含代码和依赖；数据、配置、日志放在宿主机 `/data/zer0share-data`（可用 `ZER0SHARE_DATA_ROOT` 覆盖），挂载进容器：
+
+```
+/data/zer0share-data/
+├── config/settings.toml   # 只读挂载，路径保持相对写法（data、db/meta.duckdb、logs/pipeline.log）
+├── data/  db/  logs/  reports/
+```
 
 ```bash
-# 安装并启用服务
-sudo cp scripts/zer0share-scheduler.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable zer0share-scheduler
-sudo systemctl start zer0share-scheduler
+# 发布：用当前 git HEAD 构建镜像（tag = 日期-短 hash）并滚动更新；有未提交代码会拒绝
+deploy/deploy.sh
 
-# 查看状态
-sudo systemctl status zer0share-scheduler
+# 回滚到已有镜像
+deploy/deploy.sh 20261107-03ac855
 
-# 查看实时日志
-journalctl -u zer0share-scheduler -f
+# 查看状态和日志
+docker compose -f deploy/docker-compose.yml ps
+docker logs -f zer0share-scheduler
+tail -f /data/zer0share-data/logs/pipeline.log
+
+# 在生产容器里手动执行命令
+docker exec zer0share-scheduler python main.py sync --table trade_cal
 
 # 修改 settings.toml 后重启生效
-sudo systemctl restart zer0share-scheduler
+docker restart zer0share-scheduler
 ```
+
+容器以 uid 1000 运行、时区固定 `Asia/Shanghai`，`restart: unless-stopped`。
+
+旧的 systemd 方式保留在 `deploy/systemd/zer0share-scheduler.service`，仅作回滚参考；不要和容器同时启用，否则会两套调度同时写数据。
 
 ### 手动启动（调试用）
 

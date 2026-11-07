@@ -1,5 +1,7 @@
 # 生产调度服务。数据目录在宿主机 ${ZER0SHARE_DATA_ROOT}（默认 /data/zer0share-data）
-# 部署：scripts/deploy.sh
+# 部署：deploy/deploy.sh
+name: zer0share
+
 services:
   zer0share-scheduler:
     image: zer0share:${TAG:-latest}

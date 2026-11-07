@@ -30,3 +30,6 @@ __pycache__/
 
 # Claude local config
 .claude/
+
+# Local agent scratch
+.superpowers/

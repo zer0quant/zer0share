@@ -3,7 +3,7 @@ import pandas as pd
 from loguru import logger
 
 import zer0share.dateutil as dateutil
-from zer0share.fetcher import FUTURES_EXCHANGES
+from zer0share.sources.tushare import FUTURES_EXCHANGES
 from zer0share.storage import DailyPartitionStore, SnapshotStore
 from zer0share.sync import SyncRuntime
 from zer0share.sync._jobs import DailySyncJob, SyncJob

@@ -1499,7 +1499,7 @@ def test_index_daily_in_query_dispatch(tmp_path):
 # --- Futures API tests ---
 
 from zer0share.storage import DailyPartitionStore
-from zer0share.fetcher import (
+from zer0share.sources.tushare import (
     FUT_BASIC_COLS, FUT_DAILY_COLS, FUT_HOLDING_COLS,
     FUT_WSR_COLS, FUT_SETTLE_COLS, FUT_MAPPING_COLS,
 )
@@ -1759,7 +1759,7 @@ def test_batch2_query_dispatch(tmp_path):
 
 # --- Options API tests ---
 
-from zer0share.fetcher import OPT_BASIC_COLS, OPT_DAILY_COLS
+from zer0share.sources.tushare import OPT_BASIC_COLS, OPT_DAILY_COLS
 
 
 def _write_opt_daily_data(data_dir, trade_date, ts_codes=None):

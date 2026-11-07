@@ -5,7 +5,7 @@ import time
 from datetime import date
 from unittest.mock import call, patch
 
-from zer0share.fetcher import TushareFetcher
+from zer0share.sources.tushare import TushareFetcher
 
 
 BASIC_COLS = [
@@ -476,7 +476,7 @@ def test_fetch_sw_member_iterates_l1_codes(mock_pro):
     mock_pro.index_member_all.side_effect = member_dfs
     fetcher = TushareFetcher("fake_token")
 
-    with patch("zer0share.fetcher.time.sleep"):
+    with patch("zer0share.sources.tushare.time.sleep"):
         df = fetcher.fetch_sw_member()
 
     assert list(df.columns) == SW_MEMBER_COLS
@@ -527,7 +527,7 @@ def test_fetch_sw_member_preserves_date_strings(mock_pro):
     ]
     fetcher = TushareFetcher("fake_token")
 
-    with patch("zer0share.fetcher.time.sleep"):
+    with patch("zer0share.sources.tushare.time.sleep"):
         df = fetcher.fetch_sw_member()
 
     # Two versions with different l3_codes don't deduplicate
@@ -577,7 +577,7 @@ def test_fetch_ci_member_iterates_l1_codes(mock_pro):
     mock_pro.ci_index_member.side_effect = [initial_df] + member_dfs
     fetcher = TushareFetcher("fake_token")
 
-    with patch("zer0share.fetcher.time.sleep"):
+    with patch("zer0share.sources.tushare.time.sleep"):
         df = fetcher.fetch_ci_member()
 
     assert list(df.columns) == CI_MEMBER_COLS
@@ -613,7 +613,7 @@ def test_fetch_ci_member_preserves_date_strings(mock_pro):
     ]
     fetcher = TushareFetcher("fake_token")
 
-    with patch("zer0share.fetcher.time.sleep"):
+    with patch("zer0share.sources.tushare.time.sleep"):
         df = fetcher.fetch_ci_member()
 
     assert len(df) == 1
@@ -1084,7 +1084,7 @@ def test_fetch_etf_sh_cons_returns_empty_when_none(mock_pro):
 
 # --- Futures tests ---
 
-from zer0share.fetcher import (
+from zer0share.sources.tushare import (
     FUT_BASIC_COLS, FUT_DAILY_COLS, FUT_HOLDING_COLS,
     FUT_WSR_COLS, FUT_SETTLE_COLS, FUT_MAPPING_COLS,
     FUTURES_EXCHANGES,
@@ -1310,7 +1310,7 @@ def test_fetch_fut_mapping_returns_correct_columns(mock_pro):
 
 # --- Futures batch 2 tests ---
 
-from zer0share.fetcher import (
+from zer0share.sources.tushare import (
     FT_LIMIT_COLS, FUT_WEEKLY_COLS, FUT_MONTHLY_COLS,
     FUT_INDEX_DAILY_COLS, FUT_WEEKLY_DETAIL_COLS,
 )
@@ -1503,7 +1503,7 @@ def test_fetch_fut_weekly_detail_returns_empty_when_none(mock_pro):
 
 # --- Options fetcher tests ---
 
-from zer0share.fetcher import (
+from zer0share.sources.tushare import (
     OPTIONS_EXCHANGES, OPT_BASIC_COLS, OPT_DAILY_COLS,
 )
 
@@ -1614,7 +1614,7 @@ def test_fetch_opt_daily_returns_correct_columns(mock_pro):
     ]
     fetcher = TushareFetcher("fake_token")
 
-    with patch("zer0share.fetcher.time.sleep"):
+    with patch("zer0share.sources.tushare.time.sleep"):
         df = fetcher.fetch_opt_daily(date(2024, 1, 2))
 
     assert list(df.columns) == OPT_DAILY_COLS
@@ -1636,7 +1636,7 @@ def test_fetch_opt_daily_calls_api_with_date(mock_pro):
     mock_pro.opt_daily.return_value = pd.DataFrame([_opt_daily_row()])
     fetcher = TushareFetcher("fake_token")
 
-    with patch("zer0share.fetcher.time.sleep"):
+    with patch("zer0share.sources.tushare.time.sleep"):
         fetcher.fetch_opt_daily("20240102")
 
     assert mock_pro.opt_daily.call_count == 6

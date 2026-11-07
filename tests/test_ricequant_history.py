@@ -8,7 +8,7 @@ import pyarrow.parquet as pq
 import pytest
 from loguru import logger
 
-from zer0share.ricequant_history import (
+from zer0share.sync.ricequant_history import (
     RiceQuantHistoryManifest,
     RiceQuantHistoryRunner,
     month_chunks,

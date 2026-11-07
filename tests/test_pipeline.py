@@ -21,7 +21,7 @@ from zer0share.storage import (
     SnapshotStore,
     write_trade_cal,
 )
-from zer0share.fetcher import INDEX_DAILY_CODES, FUTURES_EXCHANGES, OPTIONS_EXCHANGES
+from zer0share.sources.tushare import INDEX_DAILY_CODES, FUTURES_EXCHANGES, OPTIONS_EXCHANGES
 from zer0share.catalog import INDEX_WEIGHT_SPEC
 
 

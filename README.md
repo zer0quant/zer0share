@@ -140,8 +140,8 @@ zer0share/
 │   ├── api.py        # 本地 Tushare-like 查询 API
 │   ├── catalog.py    # 本地表结构、路径和查询规格
 │   ├── cli.py        # Click CLI 实现
-│   ├── fetcher.py    # Tushare API 封装
 │   ├── pipeline.py   # 同步任务编排
+│   ├── sources/      # 数据源封装（Tushare、RiceQuant）
 │   ├── sync/         # 各专题同步任务
 │   ├── query/        # 本地查询实现
 │   ├── quality/      # 数据质检

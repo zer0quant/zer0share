@@ -42,7 +42,7 @@ def main() -> None:
     from zer0share.sources import DataSources, RiceQuantFetcher, TushareFetcher
     from zer0share.storage import MetaStore
     from zer0share.trading_calendar import TradingCalendar
-    from zer0share.ricequant_history import (
+    from zer0share.sync.ricequant_history import (
         RiceQuantHistoryManifest,
         RiceQuantHistoryRunner,
         parse_bytes,

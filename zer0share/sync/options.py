@@ -2,7 +2,7 @@ import time
 import pandas as pd
 from loguru import logger
 
-from zer0share.fetcher import OPTIONS_EXCHANGES
+from zer0share.sources.tushare import OPTIONS_EXCHANGES
 from zer0share.storage import DailyPartitionStore, SnapshotStore
 from zer0share.sync import SyncRuntime
 from zer0share.sync._jobs import DailySyncJob, SyncJob

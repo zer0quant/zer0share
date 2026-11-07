@@ -34,7 +34,7 @@ A 股、ETF、期货、期权数据本地化管道：基于 [Tushare Pro](https:
 - **复权行情**：本地 `pro_bar()` 支持不复权、前复权（qfq）和后复权（hfq）
 - **股票池构建**：研究基础池、交易基础池、沪深300/中证500/中证1000等交易池
 - **数据质检**：本地表级质量检查，生成详细报告
-- **自动化运维**：APScheduler 定时同步，支持企业微信失败告警
+- **自动化运维**：APScheduler 定时同步，Docker 一键部署与回滚，支持企业微信 / 飞书失败告警
 
 ## 安装
 
@@ -68,8 +68,15 @@ log_path = "logs/pipeline.log"
 # 每个表单独配置触发时间（HH:MM），完整示例见 config/settings.example.toml
 
 [notifier]
-wecom_webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
-enabled = false            # 填写真实 webhook_url 后改为 true
+enabled = false            # 至少启用一个通道后改为 true
+
+[notifier.wecom]
+enabled = false
+webhook_url = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
+
+[notifier.feishu]
+enabled = false
+webhook_url = "https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_KEY"
 ```
 
 ## 快速开始
@@ -93,6 +100,30 @@ print(pro.daily(ts_code='000001.SZ', start_date='20240101', end_date='20240131')
 ```
 
 同步顺序、逐表命令和定时调度部署见[同步指南](docs/guides/SYNC_GUIDE.md)。
+
+## 生产部署（Docker）
+
+定时调度推荐用 Docker 常驻运行：镜像只包含代码和锁定的依赖，数据、配置、日志放在宿主机目录（默认 `/data/zer0share-data`，可用环境变量 `ZER0SHARE_DATA_ROOT` 覆盖）并挂载进容器。
+
+```
+/data/zer0share-data/
+├── config/settings.toml   # 只读挂载；路径保持相对写法（data、db/meta.duckdb、logs/pipeline.log）
+├── data/                  # Parquet 数据
+├── db/                    # DuckDB 元数据
+├── logs/
+└── reports/               # 数据质检报告
+```
+
+```bash
+deploy/deploy.sh                       # 用当前 git HEAD 构建镜像（tag = 日期-短 hash）并更新容器
+deploy/deploy.sh 20261107-48e1312      # 回滚到已有镜像
+docker logs -f zer0share-scheduler     # 查看调度日志
+docker exec zer0share-scheduler python main.py status   # 在生产容器里执行 CLI
+```
+
+开发与生产分离：在仓库里改代码、跑测试不会影响正在运行的调度；提交后执行 `deploy/deploy.sh` 才会上线（有未提交的代码改动时脚本会拒绝部署）。开发时如需调试同步逻辑，请把 `settings.toml` 的 `data_dir` 指向单独的测试目录，避免写入生产数据。
+
+完整说明（含旧的 systemd 方式）见[同步指南的部署章节](docs/guides/SYNC_GUIDE.md#docker-部署推荐服务器常驻)。
 
 ## 本地查询 API
 
@@ -144,10 +175,11 @@ zer0share/
 │   ├── sources/      # 数据源封装（Tushare、RiceQuant）
 │   ├── sync/         # 各专题同步任务
 │   ├── query/        # 本地查询实现
+│   ├── news/         # 新闻同步（JSONL 归档 + SQLite）
 │   ├── quality/      # 数据质检
 │   ├── universe.py   # 股票池构建
 │   ├── scheduler.py  # APScheduler 定时任务
-│   ├── notifier.py   # 企业微信告警
+│   ├── notifier.py   # 企业微信 / 飞书告警
 │   └── storage.py    # Parquet 读写 + DuckDB MetaStore
 ├── config/           # settings.example.toml
 ├── deploy/           # Docker 镜像、compose、发布脚本（systemd/ 为旧方案）

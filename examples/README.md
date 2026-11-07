@@ -2,7 +2,15 @@
 
 Run these examples from the repository root after syncing local data.
 
-所有脚本只读取本地 Parquet 文件，通过 DuckDB 执行，不访问 Tushare，不消耗积分。
+默认示例只读取本地 Parquet 文件，通过 DuckDB 执行，不访问 Tushare，不消耗积分。米筐开盘均价示例另提供 `--source online` 在线取数选项，会消耗米筐账户数据配额。
+
+## 米筐开盘后 15 分钟均价
+
+[opening_15m_twap_vwap.py](ricequant/opening_15m_twap_vwap.py) 按证券、日期计算 09:31—09:45 的 TWAP / VWAP，支持 A 股和 ETF、本地或在线取数，并导出 CSV。详见[使用说明](ricequant/opening_15m_twap_vwap.md)。
+
+```bash
+uv run python examples/ricequant/opening_15m_twap_vwap.py --order-book-ids 000001.XSHE --start-date 20240102
+```
 
 ---
 
